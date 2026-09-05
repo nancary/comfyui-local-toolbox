@@ -511,7 +511,7 @@ function loadSkel(s){
   skel=s;
   slots=(s.slots||[]).map(x=>{
     const o=old[x.k];
-    return {k:x.k, cats:(x.cats||[]).slice(), hint:x.hint||"", items:o?o.items:[], free:o?o.free:""};
+    return {k:x.k, cats:(x.cats||[]).slice(), hint:x.hint||"", tmpl:x.tmpl||"{v}", items:o?o.items:[], free:o?o.free:""};
   });
   selSlot=-1; posManual=false;
   renderSkel(); renderCanvas(); rebuildFinal();
@@ -535,10 +535,13 @@ function renderSlots(box){
   $("blockCnt").textContent=total+" 槽 · 已填 "+filled+" · "+words+" 词";
   $("joinArrow").textContent="⬇ 按槽位顺序拼接 · 空槽自动跳过 ↓";
   $("joinArrow").style.display = filled ? "block" : "none";
+  const bp=(LIB.bases||{})[curBase]||{};
+  const prose = !!(bp.supports_cn && bp.syntax==="natural");
   $("canvasHint").textContent = skel.name+"｜"+
     (selSlot>=0&&slots[selSlot]
       ? "已锁定「"+slots[selSlot].k+"」槽——点左侧标签直接填入它；再点该槽名解锁回自动匹配"
-      : "点左侧标签自动填入适配槽位 · 点槽位名可锁定目标 · 空槽自动跳过 · 槽内可直接输入");
+      : "点左侧标签自动填入适配槽位 · 点槽位名可锁定目标 · 空槽自动跳过 · 槽内可直接输入")+
+    (prose ? " · "+baseName(curBase)+" 将按句式成段输出" : "");
   slots.forEach((s,i)=>{
     const row=document.createElement("div");
     row.className="slotrow"+(selSlot===i?" sel":"");
@@ -623,18 +626,26 @@ function joinPos(){
     if(ws==="paren" && b.w && b.w!==1.0) return "("+txt+":"+b.w.toFixed(2).replace(/0$/,"")+")";
     return txt;
   };
+  // 自然语言底模（Z-Image/Krea2）+ 骨架 → 按槽位句式成段；danbooru 系 / 自由模式 → 逗号拼接
+  const prose = !!(skel && bp.supports_cn && bp.syntax==="natural");
   let parts;
   if(skel){
     parts=[];
     slots.forEach(s=>{
       const arr=s.items.map(partText);
       if(s.free&&s.free.trim()) arr.push(s.free.trim());
-      if(arr.length) parts.push(arr.join(", "));
+      if(!arr.length) return;
+      if(prose){
+        const v=arr.join("、");
+        parts.push(s.tmpl ? s.tmpl.replace("{v}", v) : v);
+      } else {
+        parts.push(arr.join(", "));
+      }
     });
   } else {
     parts=canvas.map(partText);
   }
-  return ponyAutoPrefix(parts.join(", "));
+  return ponyAutoPrefix(parts.join(prose ? "，" : ", "));
 }
 function rebuildFinal(force){
   if(!force && posManual) return;
