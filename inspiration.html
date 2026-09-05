@@ -58,7 +58,7 @@
   .catnav button.active { background:var(--accent); color:#fff; }
   .catnav button .n { float:right; color:var(--sub); font-size:10.5px; }
   .catnav button.active .n { color:#d9d6ff; }
-  .taggrid { overflow-y:auto; display:flex; flex-wrap:wrap; gap:5px; align-content:flex-start; padding:1px 2px 8px; scroll-behavior:smooth; }
+  .taggrid { overflow-y:auto; position:relative; display:flex; flex-wrap:wrap; gap:5px; align-content:flex-start; padding:1px 2px 8px; scroll-behavior:smooth; }
   .grphead { flex:0 0 100%; position:sticky; top:-2px; z-index:2; background:linear-gradient(#fff,#fff); border-bottom:1px solid var(--line); padding:4px 2px 3px; margin-top:4px; font-size:12px; font-weight:700; color:var(--ink); }
   .grphead:first-child { margin-top:0; }
   .grphead .n { color:var(--sub); font-weight:400; font-size:10.8px; margin-left:5px; }
@@ -74,7 +74,21 @@
   .skelrow .lbl { color:var(--sub); font-size:11.4px; }
   .skel { border:1px solid #d9d5ff; background:var(--accent-soft); color:var(--accent); border-radius:999px; padding:2px 10px; font-size:11.8px; font-weight:600; }
   .skel:hover { background:var(--accent); color:#fff; }
+  .skel.on { background:var(--accent); color:#fff; border-color:var(--accent); }
   #blocks { overflow-y:auto; flex:1; min-height:0; display:flex; flex-direction:column; gap:4px; padding:2px 2px 4px; }
+  /* 骨架槽位行 */
+  .slotrow { display:flex; align-items:center; gap:6px; flex-wrap:wrap; border:1px solid var(--line); border-radius:9px; padding:5px 8px; background:#fbfcfe; font-size:12.3px; flex:0 0 auto; }
+  .slotrow.sel { border-color:var(--accent); background:var(--accent-soft); box-shadow:0 0 0 1px var(--accent) inset; }
+  .slotrow .skk { font-weight:700; font-size:12px; color:var(--accent); cursor:pointer; white-space:nowrap; flex:0 0 auto; padding:0 4px; border-radius:6px; }
+  .slotrow.sel .skk { background:var(--accent); color:#fff; }
+  .schip { display:inline-flex; align-items:center; gap:3px; background:#fff; border:1px solid var(--line); border-radius:999px; padding:1px 4px 1px 9px; font-size:11.8px; max-width:220px; }
+  .schip .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .schip button { border:none; background:none; color:var(--sub); font-size:10.5px; cursor:pointer; padding:0 3px; line-height:1.4; }
+  .schip button:hover { color:#e5484d; }
+  .sfree { flex:1; min-width:100px; border:none; border-bottom:1px dashed var(--line); background:transparent; font-size:11.8px; padding:2px 4px; outline:none; color:var(--ink); }
+  .sfree:focus { border-bottom-color:var(--accent); }
+  .sfree::placeholder { color:#b6bdcc; }
+  /* 自由积木块 */
   .bblock { display:flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:4px 7px; background:#fbfcfe; font-size:12.4px; flex:0 0 auto; }
   .bblock .idx { flex:0 0 18px; height:18px; border-radius:6px; background:var(--accent); color:#fff; font-size:10.8px; display:flex; align-items:center; justify-content:center; font-weight:700; }
   .bblock .cat { color:var(--sub); font-size:10.6px; min-width:52px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -156,7 +170,7 @@
 
   <div class="topbar">
     <h1>灵感积木 <span>Blocks</span></h1>
-    <span class="sub">分类标签像搭积木一样堆出画面 → 一键试跑 → 记录实验 · 词库参考「Danbooru 标签超市」</span>
+    <span class="sub">骨架槽位 / 自由积木双模式 · 点标签搭画面 → 一键试跑 → 记录实验 · 词库参考「Danbooru 标签超市」</span>
     <div class="right"><a class="toolbtn" href="/gallery.html">← 返回图鉴</a></div>
   </div>
 
@@ -185,9 +199,12 @@
       <div class="phead">
         <h3>🧩 积木画布</h3>
         <span class="cnt" id="blockCnt">0 块</span>
-        <button class="toolbtn" style="margin-left:auto" onclick="clearCanvas()">清空</button>
+        <span style="margin-left:auto;display:flex;gap:6px;align-items:center">
+          <button class="toolbtn" id="exitSkelBtn" style="display:none" onclick="exitSkel()">退出骨架 · 摊平为积木</button>
+          <button class="toolbtn" onclick="clearCanvas()">清空</button>
+        </span>
       </div>
-      <div class="chinthint">点左侧标签按顺序堆到这里（编号=拼接顺序，可拖拽换位），搭好后拼成下面的最终提示词</div>
+      <div class="chinthint" id="canvasHint">点左侧标签按顺序堆到这里（编号=拼接顺序，可拖拽换位），搭好后拼成下面的最终提示词</div>
       <div class="skelrow" id="skelRow"></div>
       <div id="blocks"></div>
       <div class="joinarrow" id="joinArrow">⬇ 按上面顺序拼接 ↓</div>
@@ -268,7 +285,11 @@ let LIB = null, SM = null, LORAS = [];
 let curBase = localStorage.getItem("ib_base") || "zimage";
 let curLib = "curated";      // curated | market
 let curBlk = 0;              // 当前词库块索引
-let canvas = [];             // [{cat, t, zh, w}]
+let canvas = [];             // 自由模式积木 [{cat, t, zh, w}]
+let skel = null;             // 当前骨架模板（null = 自由模式）
+let slots = [];              // 骨架槽位 [{k, cats, hint, items, free}]
+let selSlot = -1;            // 锁定的槽位索引（-1 = 自动匹配）
+let groupTops = [];          // 左侧分类锚点位置快照
 let loras = [];              // [{name, strength}]
 let negManual = false, posManual = false;
 let lastResult = null;
@@ -330,7 +351,8 @@ function switchLib(lib){
   $("tabCurated").classList.toggle("active", lib==="curated");
   $("tabMarket").classList.toggle("active", lib==="market");
   renderCatNav(); renderTags();
-}function renderCatNav(){
+}
+function renderCatNav(){
   const nav = $("catNav"); nav.innerHTML="";
   const blocks = libBlocks();
   const total = blocks.reduce((s,b)=>s+(b.items||[]).length,0);
@@ -340,8 +362,9 @@ function switchLib(lib){
     b.innerHTML = esc(blk.cat)+'<span class="n">'+(blk.items||[]).length+"</span>";
     b.title = blk.src ? "来源 "+blk.src : "";
     b.onclick=()=>{
-      const head=$("tagGrid").querySelector('.grphead[data-g="'+i+'"]');
-      if(head){ head.scrollIntoView({behavior:"smooth", block:"start"}); }
+      const top=(groupTops[i]||0)-2;
+      try{ $("tagGrid").scrollTo({top, behavior:"smooth"}); }
+      catch(e){ $("tagGrid").scrollTop=Math.max(0,top); }
       nav.querySelectorAll("button").forEach(x=>x.classList.remove("active"));
       b.classList.add("active");
     };
@@ -352,7 +375,7 @@ function switchLib(lib){
 function renderTags(){
   const grid=$("tagGrid"); grid.innerHTML="";
   const blocks=libBlocks();
-  if(!blocks.length){ grid.innerHTML='<div class="empty">暂无标签</div>'; return; }
+  if(!blocks.length){ groupTops=[]; grid.innerHTML='<div class="empty">暂无标签</div>'; return; }
   blocks.forEach((blk,gi)=>{
     const h=document.createElement("div"); h.className="grphead"; h.dataset.g=gi;
     h.innerHTML = esc(blk.cat)+'<span class="n">'+(blk.items||[]).length+" 条</span>";
@@ -366,18 +389,28 @@ function renderTags(){
       grid.appendChild(d);
     });
   });
+  // scrollTop=0 时快照各分组头位置，供左侧分类锚点精确跳转
+  groupTops = blocks.map((b,gi)=>{
+    const h=grid.querySelector('.grphead[data-g="'+gi+'"]');
+    return h ? h.offsetTop : 0;
+  });
 }
 
-/* ---------- 画布 ---------- */
+/* ---------- 画布（双态：自由积木 / 骨架槽位） ---------- */
 function addBlock(cat,it){
+  if(skel){ fillSlot(cat,it); return; }
   canvas.push({cat, t:it.t, zh:it.zh||"", w:1.0});
   posManual=false; rebuildFinal(); renderCanvas();
 }
 function renderCanvas(){
   const box=$("blocks"); box.innerHTML="";
+  if(skel){ renderSlots(box); return; }
+  $("exitSkelBtn").style.display="none";
   $("blockCnt").textContent=canvas.length+" 块";
+  $("canvasHint").textContent="点左侧标签按顺序堆到这里（编号=拼接顺序，可拖拽换位），搭好后拼成下面的最终提示词";
+  $("joinArrow").textContent="⬇ 按上面顺序拼接 ↓";
   $("joinArrow").style.display = canvas.length ? "block" : "none";
-  if(!canvas.length){ box.innerHTML='<div id="dropHint">画布还是空的——<br>去左侧标签库点几块积木，<br>或装一套右侧风格配方</div>'; return; }
+  if(!canvas.length){ box.innerHTML='<div id="dropHint">画布还是空的——<br>去左侧标签库点几块积木、装一套配方，<br>或点上方「骨架模板」启用槽位画布</div>'; return; }
   const ws = ((LIB.bases||{})[curBase]||{}).weight_syntax;
   canvas.forEach((b,i)=>{
     const d=document.createElement("div"); d.className="bblock"; d.draggable=true;
@@ -408,7 +441,129 @@ function renderCanvas(){
     box.appendChild(d);
   });
 }
-function clearCanvas(){ canvas=[]; posManual=false; rebuildFinal(); renderCanvas(); }
+function clearCanvas(){
+  if(skel){ slots.forEach(s=>{ s.items=[]; s.free=""; }); }
+  else canvas=[];
+  posManual=false; rebuildFinal(); renderCanvas();
+}
+
+/* ---------- 骨架：槽位制结构模板 ---------- */
+function slotHas(s){ return (s.items&&s.items.length>0) || !!(s.free&&s.free.trim()); }
+function renderSkel(){
+  const row=$("skelRow"); row.innerHTML="";
+  const list=(LIB.skeletons||[]);
+  if(!list.length){ row.style.display="none"; return; }
+  row.style.display="flex";
+  const lbl=document.createElement("span"); lbl.className="lbl"; lbl.textContent="🦴 骨架模板：";
+  row.appendChild(lbl);
+  list.forEach(s=>{
+    const b=document.createElement("button");
+    b.className="skel"+(skel&&skel.name===s.name?" on":"");
+    b.textContent=s.emoji+" "+s.name;
+    b.title="启用槽位画布（空槽不拼入提示词）· "+(s.desc||"")+"\n"+(s.slots||[]).map(x=>"· "+x.k).join(" → ");
+    b.onclick=()=>loadSkel(s);
+    row.appendChild(b);
+  });
+}
+function loadSkel(s){
+  const old={};
+  if(skel) slots.forEach(x=>old[x.k]=x);   // 切换模板时保留同名槽位内容
+  skel=s;
+  slots=(s.slots||[]).map(x=>{
+    const o=old[x.k];
+    return {k:x.k, cats:(x.cats||[]).slice(), hint:x.hint||"", items:o?o.items:[], free:o?o.free:""};
+  });
+  selSlot=-1; posManual=false;
+  renderSkel(); renderCanvas(); rebuildFinal();
+}
+function fillSlot(cat,it){
+  let idx=selSlot;
+  if(!(idx>=0 && idx<slots.length)){
+    // 自动匹配：优先填「分类适配且为空」的槽 → 分类适配的槽 → 任意空槽
+    idx=slots.findIndex(s=>s.cats.includes(cat)&&!slotHas(s));
+    if(idx<0) idx=slots.findIndex(s=>s.cats.includes(cat));
+    if(idx<0) idx=slots.findIndex(s=>!slotHas(s));
+    if(idx<0) idx=0;
+  }
+  slots[idx].items.push({t:it.t, zh:it.zh||"", cat, w:1});
+  posManual=false; renderCanvas(); rebuildFinal();
+}
+function renderSlots(box){
+  const total=slots.length, filled=slots.filter(slotHas).length;
+  const words=slots.reduce((n,s)=>n+s.items.length+((s.free&&s.free.trim())?1:0),0);
+  $("exitSkelBtn").style.display="";
+  $("blockCnt").textContent=total+" 槽 · 已填 "+filled+" · "+words+" 词";
+  $("joinArrow").textContent="⬇ 按槽位顺序拼接 · 空槽自动跳过 ↓";
+  $("joinArrow").style.display = filled ? "block" : "none";
+  $("canvasHint").textContent = skel.name+"｜"+
+    (selSlot>=0&&slots[selSlot]
+      ? "已锁定「"+slots[selSlot].k+"」槽——点左侧标签直接填入它；再点该槽名解锁回自动匹配"
+      : "点左侧标签自动填入适配槽位 · 点槽位名可锁定目标 · 空槽自动跳过 · 槽内可直接输入");
+  slots.forEach((s,i)=>{
+    const row=document.createElement("div");
+    row.className="slotrow"+(selSlot===i?" sel":"");
+    const kk=document.createElement("span"); kk.className="skk"; kk.textContent=s.k;
+    kk.title="点此"+(selSlot===i?"解锁（回到自动匹配）":"锁定为填入目标")+
+      (s.cats.length ? " · 适配分类："+s.cats.join("、") : " · 纯自由输入槽");
+    kk.onclick=()=>{ selSlot = (selSlot===i ? -1 : i); renderCanvas(); };
+    row.appendChild(kk);
+    s.items.forEach((it,j)=>{
+      const c=document.createElement("span"); c.className="schip";
+      c.title=it.t||"";
+      c.innerHTML='<span class="t">'+esc(blockText(it))+'</span><button title="移除">✕</button>';
+      c.querySelector("button").onclick=()=>{ s.items.splice(j,1); posManual=false; renderCanvas(); rebuildFinal(); };
+      row.appendChild(c);
+    });
+    const inp=document.createElement("input"); inp.className="sfree";
+    inp.placeholder = s.items.length ? "追加直接输入…" : (s.hint || "直接输入…");
+    inp.value = s.free||"";
+    inp.addEventListener("input", ()=>{ s.free=inp.value; posManual=false; rebuildFinal(); });
+    inp.addEventListener("keydown", e=>{ if(e.key==="Enter") inp.blur(); });
+    row.appendChild(inp);
+    box.appendChild(row);
+  });
+}
+function exitSkel(){
+  if(!skel) return;
+  canvas=[];
+  slots.forEach(s=>{
+    (s.items||[]).forEach(it=>canvas.push({cat:it.cat||s.k, t:it.t, zh:it.zh||"", w:it.w||1}));
+    if(s.free&&s.free.trim()) canvas.push({cat:"自由输入", t:s.free.trim(), zh:"", w:1});
+  });
+  skel=null; slots=[]; selSlot=-1; posManual=false;
+  renderSkel(); renderCanvas(); rebuildFinal();
+}
+/* 实验记录的结构快照 / 回载 */
+function currentStructure(){
+  if(skel) return {skel:skel.name, slots:slots.map(s=>({k:s.k, items:s.items.map(x=>({t:x.t,zh:x.zh||"",cat:x.cat||"",w:x.w||1})), free:s.free||""}))};
+  return {skel:null, blocks:canvas.map(b=>({cat:b.cat,t:b.t,zh:b.zh||"",w:b.w||1}))};
+}
+function loadBlocksArr(arr){
+  skel=null; slots=[]; selSlot=-1;
+  canvas=(arr||[]).map(b=>({cat:b.cat||"", t:b.t, zh:b.zh||"", w:b.w||1}));
+  renderSkel(); renderCanvas(); rebuildFinal();
+}
+function restoreStructure(rec){
+  curBase=rec.base; localStorage.setItem("ib_base",curBase); renderBases();
+  negManual=true; $("finalNeg").value=rec.neg||"";
+  const st=rec.structure||{};
+  if(st.skel){
+    const s=(LIB.skeletons||[]).find(x=>x.name===st.skel);
+    if(s){
+      loadSkel(s);
+      (st.slots||[]).forEach(r=>{
+        const t=slots.find(x=>x.k===r.k);
+        if(t){ t.items=(r.items||[]).map(x=>({t:x.t,zh:x.zh||"",cat:x.cat||"",w:x.w||1})); t.free=r.free||""; }
+      });
+      if(rec.pos){ $("finalPos").value=rec.pos; posManual=true; } else { posManual=false; rebuildFinal(); }
+      applyBase();
+      return;
+    }
+  }
+  loadBlocksArr(st.blocks||rec.blocks||[]);
+  if(rec.pos){ $("finalPos").value=rec.pos; posManual=true; } else { posManual=false; rebuildFinal(); }
+  applyBase();
+}
 
 function ponyAutoPrefix(text){
   if(curBase!=="pony") return text;
@@ -423,11 +578,22 @@ function blockText(b){
 function joinPos(){
   const bp=(LIB.bases||{})[curBase]||{};
   const ws=bp.weight_syntax;
-  let parts=canvas.map(b=>{
+  const partText=b=>{
     const txt=blockText(b);
     if(ws==="paren" && b.w && b.w!==1.0) return "("+txt+":"+b.w.toFixed(2).replace(/0$/,"")+")";
     return txt;
-  });
+  };
+  let parts;
+  if(skel){
+    parts=[];
+    slots.forEach(s=>{
+      const arr=s.items.map(partText);
+      if(s.free&&s.free.trim()) arr.push(s.free.trim());
+      if(arr.length) parts.push(arr.join(", "));
+    });
+  } else {
+    parts=canvas.map(partText);
+  }
   return ponyAutoPrefix(parts.join(", "));
 }
 function rebuildFinal(force){
@@ -473,26 +639,6 @@ function renderLoraChips(){
   });
 }
 
-/* ---------- 骨架（结构化提示词模板） ---------- */
-function renderSkel(){
-  const row=$("skelRow"); row.innerHTML="";
-  const list=(LIB.skeletons||[]);
-  if(!list.length){ row.style.display="none"; return; }
-  row.style.display="flex";
-  const lbl=document.createElement("span"); lbl.className="lbl"; lbl.textContent="🦴 骨架一键搭：";
-  row.appendChild(lbl);
-  list.forEach(s=>{
-    const b=document.createElement("button"); b.className="skel";
-    b.textContent=s.emoji+" "+s.name; b.title="按「"+(s.order||"主体→细节→动作→场景→光影→镜头→风格")+"」结构填入画布";
-    b.onclick=()=>loadSkeleton(s);
-    row.appendChild(b);
-  });
-}
-function loadSkeleton(s){
-  if(s.base){ curBase=s.base; localStorage.setItem("ib_base",curBase); renderBases(); applyBase(); }
-  canvas=(s.blocks||[]).map(b=>({cat:b.cat,t:b.t,zh:b.zh||"",w:1.0}));
-  posManual=false; rebuildFinal(); renderCanvas();
-}
 /* ---------- 配方 ---------- */
 function renderRecipes(){
   const box=$("recipeList"); box.innerHTML="";
@@ -506,9 +652,10 @@ function renderRecipes(){
 }
 function loadRecipe(r){
   curBase=r.base; localStorage.setItem("ib_base",curBase); renderBases();
+  skel=null; slots=[]; selSlot=-1;
   canvas=(r.blocks||[]).map(b=>({cat:b.cat,t:b.t,zh:b.zh||"",w:1.0}));
   negManual=false; posManual=false;
-  applyBase(); rebuildFinal(); renderCanvas();
+  renderSkel(); applyBase(); rebuildFinal(); renderCanvas();
   $("finalPos").value=r.pos||joinPos();   // 配方带完整成句，直接用
   if(r.neg!==undefined){ $("finalNeg").value=r.neg; negManual=true; }
   window.scrollTo({top:0,behavior:"smooth"});
@@ -557,7 +704,7 @@ async function saveIdea(body,r){
   await jpost("/api/ideas",{op:"save",record:{
     base:body.base, pos:body.pos, neg:body.neg, loras:body.loras,
     img:r.img, seed:r.seed, params:r.used||{width:body.width,height:body.height},
-    blocks:canvas.map(b=>({cat:b.cat,t:b.t,zh:b.zh||"",w:b.w})),
+    structure:currentStructure(),
   }});
 }
 function setStatus(msg,err){ const el=$("genStatus"); el.textContent=msg; el.className="genstatus"+(err?" err":""); }
@@ -587,12 +734,7 @@ async function renderExps(){
     };
     const [loadBtn]=d.querySelectorAll('.ops button[title="载入画布"]');
     loadBtn.onclick=()=>{
-      curBase=rec.base; localStorage.setItem("ib_base",curBase); renderBases();
-      canvas=(rec.blocks&&rec.blocks.length)?rec.blocks.map(b=>({cat:b.cat,t:b.t,zh:b.zh||"",w:b.w||1})):[];
-      posManual=false; negManual=true;
-      applyBase(); renderCanvas();
-      $("finalPos").value=rec.pos||joinPos();
-      $("finalNeg").value=rec.neg||"";
+      restoreStructure(rec);
       if(rec.params&&rec.params.width){ setSize(rec.params.width,rec.params.height||1216); }
       window.scrollTo({top:0,behavior:"smooth"});
     };
