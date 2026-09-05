@@ -67,6 +67,11 @@
   .tchip .zh { font-size:12.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .tchip .zh .hot { color:var(--hot); margin-right:1px; }
   .tchip .en { color:var(--sub); font-size:10.2px; margin-left:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tchip .tstar { visibility:hidden; flex:0 0 auto; align-self:center; border:none; background:none; color:var(--sub); font-size:10.5px; cursor:pointer; padding:0 0 0 3px; line-height:1.2; }
+  .tchip:hover .tstar { visibility:visible; }
+  .tchip .tstar:hover { color:var(--accent); }
+  .tchip .tstar.faved { visibility:visible; color:var(--hot); }
+  .tchip .tstar.tdel:hover { color:#e5484d; }
 
   /* 中：画布 */
   .chinthint { color:var(--sub); font-size:11.6px; margin:-3px 0 7px; flex:0 0 auto; }
@@ -290,6 +295,7 @@ let skel = null;             // 当前骨架模板（null = 自由模式）
 let slots = [];              // 骨架槽位 [{k, cats, hint, items, free}]
 let selSlot = -1;            // 锁定的槽位索引（-1 = 自动匹配）
 let groupTops = [];          // 左侧分类锚点位置快照
+let CUSTOM = {blocks:[], removed:[]};  // 用户收藏块 + 精选移除记录（custom_tags.json）
 let loras = [];              // [{name, strength}]
 let negManual = false, posManual = false;
 let lastResult = null;
@@ -306,6 +312,7 @@ async function init(){
   if(location.protocol === "file:") $("fileHint").style.display = "block";
   try { LIB = await jget("/prompt_library.json"); } catch(e){ LIB = {bases:{},blocks:[],recipes:[]}; }
   try { SM = await jget("/supermarket_tags.json"); } catch(e){ SM = null; }
+  try { const c = await jget("/api/custom"); if(c && Array.isArray(c.blocks)) CUSTOM = {blocks:c.blocks, removed:Array.isArray(c.removed)?c.removed:[]}; } catch(e){ CUSTOM = {blocks:[],removed:[]}; }
   try { const d = await jget("/loras.json"); LORAS = Array.isArray(d) ? d : (d.loras||[]); } catch(e){ LORAS = []; }
   renderBases(); renderCatNav(); renderTags(); renderRecipes(); renderSkel(); applyBase(true); renderExps();
   document.addEventListener("click", e=>{ if(!$("loraDrop").contains(e.target) && e.target!==$("loraSearch")) $("loraDrop").style.display="none"; });
@@ -343,7 +350,26 @@ function applyBase(initMode){
 /* ---------- 词库 ---------- */
 function libBlocks(){
   if(curLib==="market") return (SM&&SM.blocks)||[];
-  return (LIB.blocks||[]);
+  // 精选 = 静态块（过滤掉已移除的词）+ 我的收藏块（⭐ 前缀分组，custom 标记）
+  const removed = new Set(CUSTOM.removed||[]);
+  const stat = (LIB.blocks||[])
+    .map(b=>({cat:b.cat, items:(b.items||[]).filter(it=>!removed.has(b.cat+"|"+it.t))}))
+    .filter(b=>b.items.length);
+  return stat.concat((CUSTOM.blocks||[]).map(b=>({cat:b.cat, items:b.items||[], custom:true})));
+}
+function isFav(t){
+  return (CUSTOM.blocks||[]).some(b=>(b.items||[]).some(x=>x.t===t));
+}
+async function customPost(op, payload){
+  try{
+    const r = await jpost("/api/custom", Object.assign({op}, payload));
+    if(r && r.ok && r.custom) CUSTOM = r.custom;
+  }catch(e){}
+  renderCatNav(); renderTags();
+}
+function toggleFav(marketCat, it){
+  if(isFav(it.t)) customPost("unfav", {t:it.t});
+  else customPost("fav", {cat:"⭐ "+marketCat, item:{t:it.t, zh:it.zh||""}});
 }
 function switchLib(lib){
   if(lib==="market" && !SM){ alert("标签超市词库还未导入。\n在工具目录运行：python import_supermarket.py"); return; }
@@ -385,6 +411,20 @@ function renderTags(){
       d.title = it.t;
       d.innerHTML = '<span class="zh">'+(it.hot?'<span class="hot">★</span>':"")+esc(it.zh||it.t)+'</span>'+
         (it.zh && it.zh!==it.t ? '<span class="en">'+esc(it.t)+"</span>" : "");
+      // 角标操作：超市=收藏 ★；精选静态=移除 ✕；精选收藏块=删除收藏 ✕
+      const act=document.createElement("button"); act.className="tstar";
+      if(curLib==="market"){
+        if(isFav(it.t)){ act.textContent="★"; act.classList.add("faved"); act.title="已收藏——点击取消收藏"; }
+        else { act.textContent="☆"; act.title="收藏到精选词库"; }
+        act.onclick=e=>{ e.stopPropagation(); toggleFav(blk.cat, it); };
+      } else if(blk.custom){
+        act.textContent="✕"; act.classList.add("tdel"); act.title="删除该收藏";
+        act.onclick=e=>{ e.stopPropagation(); customPost("unfav", {cat:blk.cat, t:it.t}); };
+      } else {
+        act.textContent="✕"; act.classList.add("tdel"); act.title="从精选词库移除";
+        act.onclick=e=>{ e.stopPropagation(); customPost("remove", {cat:blk.cat, t:it.t}); };
+      }
+      d.appendChild(act);
       d.onclick=()=>addBlock(blk.cat,it);
       grid.appendChild(d);
     });

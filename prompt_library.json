@@ -1,6 +1,6 @@
 {
-  "version": 5,
-  "_comment": "灵感积木词库：分层标签块 + 底模提示词档案 + 槽位制骨架模板 + 成熟风格配方。t=英文标签，zh=可直接出图的中文提示词（supports_cn 底模优先用）；hot=true 显性高效词；skeletons=槽位制结构模板：slots=[{k:槽位名, cats:适配的标签块分类(空=纯自由输入), hint:槽内直接输入的占位提示}]，空槽不拼入最终提示词；质量词块的 bases 表示仅适用底模。",
+  "version": 6,
+  "_comment": "灵感积木词库：分层标签块 + 底模提示词档案 + 槽位制骨架模板 + 成熟风格配方。t=英文标签，zh=可直接出图的中文提示词（supports_cn 底模优先用）；hot=true 显性高效词；skeletons=槽位制结构模板：slots=[{k:槽位名, cats:适配的标签块分类(空=纯自由输入), hint:槽内直接输入的占位提示}]，空槽不拼入最终提示词；质量词块的 bases 表示仅适用底模；用户的收藏与移除记录存于 custom_tags.json（经 /api/custom 读写），不改动本文件。",
   "bases": {
     "zimage": {
       "name": "Z-Image Turbo",
@@ -149,8 +149,8 @@
           "zh": "双人少女"
         },
         {
-          "t": "portrait of a young woman",
-          "zh": "一位年轻女性的肖像",
+          "t": "young woman",
+          "zh": "年轻女性",
           "hot": true
         },
         {
@@ -207,11 +207,12 @@
         {
           "t": "dancer",
           "zh": "舞者"
-        },
-        {
-          "t": "photographer with camera",
-          "zh": "拿相机的摄影师"
-        },
+        }
+      ]
+    },
+    {
+      "cat": "面孔·体貌",
+      "items": [
         {
           "t": "east asian features",
           "zh": "东亚面孔"
@@ -241,11 +242,55 @@
         {
           "t": "tanned skin",
           "zh": "健康小麦色皮肤"
+        },
+        {
+          "t": "brown eyes",
+          "zh": "棕色瞳孔"
+        },
+        {
+          "t": "blue eyes",
+          "zh": "蓝色眼眸"
+        },
+        {
+          "t": "amber eyes",
+          "zh": "琥珀色眼眸"
+        },
+        {
+          "t": "red eyes",
+          "zh": "红色眼眸"
+        },
+        {
+          "t": "sparkling glossy eyes",
+          "zh": "水光潋滟的眼眸"
+        },
+        {
+          "t": "narrow sharp eyes",
+          "zh": "细长锐利的眼型"
+        },
+        {
+          "t": "phoenix eyes",
+          "zh": "丹凤眼"
+        },
+        {
+          "t": "high nose bridge",
+          "zh": "高挺鼻梁"
+        },
+        {
+          "t": "soft plump lips",
+          "zh": "饱满柔和的唇形"
+        },
+        {
+          "t": "sharp jawline",
+          "zh": "清晰的下颌线"
+        },
+        {
+          "t": "defined collarbone",
+          "zh": "明显锁骨"
         }
       ]
     },
     {
-      "cat": "发型·五官",
+      "cat": "发型·发饰",
       "items": [
         {
           "t": "long straight black hair",
@@ -306,50 +351,6 @@
         {
           "t": "silver white hair",
           "zh": "银白长发"
-        },
-        {
-          "t": "brown eyes",
-          "zh": "棕色瞳孔"
-        },
-        {
-          "t": "blue eyes",
-          "zh": "蓝色眼眸"
-        },
-        {
-          "t": "amber eyes",
-          "zh": "琥珀色眼眸"
-        },
-        {
-          "t": "red eyes",
-          "zh": "红色眼眸"
-        },
-        {
-          "t": "sparkling glossy eyes",
-          "zh": "水光潋滟的眼眸"
-        },
-        {
-          "t": "narrow sharp eyes",
-          "zh": "细长锐利的眼型"
-        },
-        {
-          "t": "phoenix eyes",
-          "zh": "丹凤眼"
-        },
-        {
-          "t": "high nose bridge",
-          "zh": "高挺鼻梁"
-        },
-        {
-          "t": "soft plump lips",
-          "zh": "饱满柔和的唇形"
-        },
-        {
-          "t": "sharp jawline",
-          "zh": "清晰的下颌线"
-        },
-        {
-          "t": "defined collarbone",
-          "zh": "明显锁骨"
         },
         {
           "t": "traditional hairpin",
@@ -1292,15 +1293,14 @@
         {
           "k": "面孔",
           "cats": [
-            "主体·人物",
-            "发型·五官"
+            "面孔·体貌"
           ],
           "hint": "五官·皮肤质感"
         },
         {
           "k": "发型",
           "cats": [
-            "发型·五官"
+            "发型·发饰"
           ],
           "hint": "长度·颜色·造型"
         },
@@ -1569,13 +1569,13 @@
       "base": "zimage",
       "emoji": "🪔",
       "desc": "伦勃朗光+胶片颗粒+皮肤质感——情绪人像的黄金三角。",
-      "pos": "一位年轻女性的肖像，看向镜头，伦勃朗光，明暗强对比，面部特写，85mm人像镜头，浅景深虚化，精致五官，细腻皮肤质感，胶片颗粒，柯达胶片色，低饱和色调",
+      "pos": "年轻女性，看向镜头，伦勃朗光，明暗强对比，面部特写，85mm人像镜头，浅景深虚化，精致五官，细腻皮肤质感，胶片颗粒，柯达胶片色，低饱和色调",
       "neg": "",
       "blocks": [
         {
           "cat": "主体·人物",
-          "t": "portrait of a young woman",
-          "zh": "一位年轻女性的肖像"
+          "t": "young woman",
+          "zh": "年轻女性"
         },
         {
           "cat": "主体·人物",
@@ -1763,7 +1763,7 @@
           "zh": "中性帅气少女"
         },
         {
-          "cat": "发型·五官",
+          "cat": "发型·发饰",
           "t": "pixie cut",
           "zh": "精灵短发"
         },

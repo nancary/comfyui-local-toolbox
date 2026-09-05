@@ -48,6 +48,7 @@ except Exception:  # 独立运行时兜底：环境变量 + 常见安装位置�
                  os.path.join(home, "comfyui", "models", "loras")]
         if os.name == "nt":
             cands += ["D:/ComfyUI/models/loras",
+                      "D:/ADM-comfyui/models/loras",
                       os.path.join(home, "Documents", "ComfyUI", "models", "loras")]
         else:
             cands += ["/opt/ComfyUI/models/loras"]
@@ -209,6 +210,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, json.dumps(ideas, ensure_ascii=False).encode(), "application/json; charset=utf-8")
             return
 
+        if path == "/api/custom":
+            self._send(200, json.dumps(self._load_custom(), ensure_ascii=False).encode(),
+                       "application/json; charset=utf-8")
+            return
+
         if path.startswith("/comfy/"):
             self._proxy_comfy_get(path, url.query)
             return
@@ -260,6 +266,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/ideas":
             self._handle_ideas()
+            return
+        if path == "/api/custom":
+            self._handle_custom()
             return
         if path == "/comfy/prompt":
             n = int(self.headers.get("Content-Length", 0) or 0)
@@ -1041,6 +1050,79 @@ class Handler(BaseHTTPRequestHandler):
                 return
         self._send(200, json.dumps({"ok": True, "count": len(ideas)}).encode(), "application/json; charset=utf-8")
 
+    _CUSTOM_LOCK = threading.Lock()
+
+    def _load_custom(self):
+        """灵感积木自定义词库：{blocks:[{cat,items:[{t,zh}]}], removed:["cat|t"]}。"""
+        try:
+            with open(self.custom_file, encoding="utf-8") as f:
+                d = json.load(f)
+        except Exception:
+            d = {}
+        if not isinstance(d, dict):
+            d = {}
+        if not isinstance(d.get("blocks"), list):
+            d["blocks"] = []
+        if not isinstance(d.get("removed"), list):
+            d["removed"] = []
+        return d
+
+    def _save_custom(self, data):
+        tmp = self.custom_file + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, self.custom_file)
+
+    def _handle_custom(self):
+        """标签超市收藏 / 精选词库移除：POST {op: fav|unfav|remove}。返回最新 custom 全量。"""
+        n = int(self.headers.get("Content-Length", 0) or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        try:
+            data = json.loads(raw)
+        except Exception:
+            self._send(400, json.dumps({"ok": False, "error": "bad json"}).encode(), "application/json; charset=utf-8")
+            return
+        with self._CUSTOM_LOCK:
+            d = self._load_custom()
+            op = data.get("op", "")
+            if op == "fav":
+                cat = str(data.get("cat") or "").strip()
+                item = data.get("item") or {}
+                t = str(item.get("t") or "").strip()
+                if not cat or not t:
+                    self._send(400, json.dumps({"ok": False, "error": "缺少 cat 或 t"}).encode(),
+                               "application/json; charset=utf-8")
+                    return
+                blk = next((b for b in d["blocks"] if b.get("cat") == cat), None)
+                if blk is None:
+                    blk = {"cat": cat, "items": []}
+                    d["blocks"].append(blk)
+                if not any(x.get("t") == t for x in blk["items"]):
+                    blk["items"].append({"t": t, "zh": str(item.get("zh") or "")})
+            elif op == "unfav":
+                t = str(data.get("t") or "")
+                cat = data.get("cat")
+                for b in d["blocks"]:
+                    if cat is None or b.get("cat") == cat:
+                        b["items"] = [x for x in b.get("items", []) if x.get("t") != t]
+                d["blocks"] = [b for b in d["blocks"] if b.get("items")]
+            elif op == "remove":
+                key = str(data.get("cat") or "") + "|" + str(data.get("t") or "")
+                if key not in d["removed"]:
+                    d["removed"].append(key)
+            else:
+                self._send(400, json.dumps({"ok": False, "error": "未知 op"}).encode(),
+                           "application/json; charset=utf-8")
+                return
+            try:
+                self._save_custom(d)
+            except Exception as e:
+                self._send(500, json.dumps({"ok": False, "error": str(e)}).encode(),
+                           "application/json; charset=utf-8")
+                return
+        self._send(200, json.dumps({"ok": True, "custom": d}, ensure_ascii=False).encode(),
+                   "application/json; charset=utf-8")
+
     def _proxy_comfy_get(self, path, query):
         target = self.comfy + path[len("/comfy"):]
         if query:
@@ -1072,6 +1154,7 @@ class Server(ThreadingHTTPServer):
         Handler.annotations_file = annotations_file or os.path.join(os.path.abspath(www), ANNOTATIONS_JSON)
         Handler.previews_dir = previews_dir or os.path.join(os.path.abspath(www), "previews")
         Handler.experiments_file = os.path.join(os.path.abspath(www), "experiments.json")
+        Handler.custom_file = os.path.join(os.path.abspath(www), "custom_tags.json")
         self.www = os.path.abspath(www)
         super().__init__(addr, Handler)
 
