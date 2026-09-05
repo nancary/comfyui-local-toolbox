@@ -58,7 +58,10 @@
   .catnav button.active { background:var(--accent); color:#fff; }
   .catnav button .n { float:right; color:var(--sub); font-size:10.5px; }
   .catnav button.active .n { color:#d9d6ff; }
-  .taggrid { overflow-y:auto; display:flex; flex-wrap:wrap; gap:5px; align-content:flex-start; padding:1px 2px 8px; }
+  .taggrid { overflow-y:auto; display:flex; flex-wrap:wrap; gap:5px; align-content:flex-start; padding:1px 2px 8px; scroll-behavior:smooth; }
+  .grphead { flex:0 0 100%; position:sticky; top:-2px; z-index:2; background:linear-gradient(#fff,#fff); border-bottom:1px solid var(--line); padding:4px 2px 3px; margin-top:4px; font-size:12px; font-weight:700; color:var(--ink); }
+  .grphead:first-child { margin-top:0; }
+  .grphead .n { color:var(--sub); font-weight:400; font-size:10.8px; margin-left:5px; }
   .tchip { display:flex; align-items:baseline; max-width:192px; border:1px solid var(--line); background:#fbfcfe; border-radius:7px; padding:3px 8px; cursor:pointer; line-height:1.4; }
   .tchip:hover { border-color:var(--accent); background:var(--accent-soft); }
   .tchip .zh { font-size:12.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -67,6 +70,10 @@
 
   /* 中：画布 */
   .chinthint { color:var(--sub); font-size:11.6px; margin:-3px 0 7px; flex:0 0 auto; }
+  .skelrow { flex:0 0 auto; display:flex; gap:5px; flex-wrap:wrap; align-items:center; margin-bottom:7px; }
+  .skelrow .lbl { color:var(--sub); font-size:11.4px; }
+  .skel { border:1px solid #d9d5ff; background:var(--accent-soft); color:var(--accent); border-radius:999px; padding:2px 10px; font-size:11.8px; font-weight:600; }
+  .skel:hover { background:var(--accent); color:#fff; }
   #blocks { overflow-y:auto; flex:1; min-height:0; display:flex; flex-direction:column; gap:4px; padding:2px 2px 4px; }
   .bblock { display:flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:4px 7px; background:#fbfcfe; font-size:12.4px; flex:0 0 auto; }
   .bblock .idx { flex:0 0 18px; height:18px; border-radius:6px; background:var(--accent); color:#fff; font-size:10.8px; display:flex; align-items:center; justify-content:center; font-weight:700; }
@@ -181,6 +188,7 @@
         <button class="toolbtn" style="margin-left:auto" onclick="clearCanvas()">清空</button>
       </div>
       <div class="chinthint">点左侧标签按顺序堆到这里（编号=拼接顺序，可拖拽换位），搭好后拼成下面的最终提示词</div>
+      <div class="skelrow" id="skelRow"></div>
       <div id="blocks"></div>
       <div class="joinarrow" id="joinArrow">⬇ 按上面顺序拼接 ↓</div>
       <div class="promptbox">
@@ -278,7 +286,7 @@ async function init(){
   try { LIB = await jget("/prompt_library.json"); } catch(e){ LIB = {bases:{},blocks:[],recipes:[]}; }
   try { SM = await jget("/supermarket_tags.json"); } catch(e){ SM = null; }
   try { const d = await jget("/loras.json"); LORAS = Array.isArray(d) ? d : (d.loras||[]); } catch(e){ LORAS = []; }
-  renderBases(); renderCatNav(); renderTags(); renderRecipes(); applyBase(true); renderExps();
+  renderBases(); renderCatNav(); renderTags(); renderRecipes(); renderSkel(); applyBase(true); renderExps();
   document.addEventListener("click", e=>{ if(!$("loraDrop").contains(e.target) && e.target!==$("loraSearch")) $("loraDrop").style.display="none"; });
 }
 
@@ -322,32 +330,41 @@ function switchLib(lib){
   $("tabCurated").classList.toggle("active", lib==="curated");
   $("tabMarket").classList.toggle("active", lib==="market");
   renderCatNav(); renderTags();
-}
-function renderCatNav(){
+}function renderCatNav(){
   const nav = $("catNav"); nav.innerHTML="";
   const blocks = libBlocks();
   const total = blocks.reduce((s,b)=>s+(b.items||[]).length,0);
   $("libCnt").textContent = blocks.length ? (blocks.length+" 组 · "+total+" 标签") : "";
   blocks.forEach((blk,i)=>{
     const b=document.createElement("button");
-    b.className = i===curBlk?"active":"";
     b.innerHTML = esc(blk.cat)+'<span class="n">'+(blk.items||[]).length+"</span>";
     b.title = blk.src ? "来源 "+blk.src : "";
-    b.onclick=()=>{ curBlk=i; renderCatNav(); renderTags(); };
+    b.onclick=()=>{
+      const head=$("tagGrid").querySelector('.grphead[data-g="'+i+'"]');
+      if(head){ head.scrollIntoView({behavior:"smooth", block:"start"}); }
+      nav.querySelectorAll("button").forEach(x=>x.classList.remove("active"));
+      b.classList.add("active");
+    };
     nav.appendChild(b);
   });
+  if(blocks.length) nav.querySelector("button").classList.add("active");
 }
 function renderTags(){
   const grid=$("tagGrid"); grid.innerHTML="";
-  const blk = libBlocks()[curBlk];
-  if(!blk){ grid.innerHTML='<div class="empty">暂无标签</div>'; return; }
-  (blk.items||[]).forEach(it=>{
-    const d=document.createElement("div"); d.className="tchip";
-    d.title = it.t;
-    d.innerHTML = '<span class="zh">'+(it.hot?'<span class="hot">★</span>':"")+esc(it.zh||it.t)+'</span>'+
-      (it.zh && it.zh!==it.t ? '<span class="en">'+esc(it.t)+"</span>" : "");
-    d.onclick=()=>addBlock(blk.cat,it);
-    grid.appendChild(d);
+  const blocks=libBlocks();
+  if(!blocks.length){ grid.innerHTML='<div class="empty">暂无标签</div>'; return; }
+  blocks.forEach((blk,gi)=>{
+    const h=document.createElement("div"); h.className="grphead"; h.dataset.g=gi;
+    h.innerHTML = esc(blk.cat)+'<span class="n">'+(blk.items||[]).length+" 条</span>";
+    grid.appendChild(h);
+    (blk.items||[]).forEach(it=>{
+      const d=document.createElement("div"); d.className="tchip";
+      d.title = it.t;
+      d.innerHTML = '<span class="zh">'+(it.hot?'<span class="hot">★</span>':"")+esc(it.zh||it.t)+'</span>'+
+        (it.zh && it.zh!==it.t ? '<span class="en">'+esc(it.t)+"</span>" : "");
+      d.onclick=()=>addBlock(blk.cat,it);
+      grid.appendChild(d);
+    });
   });
 }
 
@@ -372,7 +389,8 @@ function renderCanvas(){
       (ws==="paren"?'<button class="mini" title="权重-">－</button><button class="mini" title="权重+">＋</button>':"")+
       '<button class="mini" title="上移">↑</button><button class="mini" title="下移">↓</button>'+
       '<button class="mini del" title="移除">✕</button>';
-    const [wdec,winc,up,down,del]=d.querySelectorAll("button");
+    const q = t => d.querySelector('button[title="'+t+'"]');
+    const wdec=q("权重-"), winc=q("权重+"), up=q("上移"), down=q("下移"), del=q("移除");
     if(wdec) wdec.onclick=()=>{ b.w=Math.max(0.6,Math.round((b.w-0.1)*10)/10); posManual=false; renderCanvas(); rebuildFinal(); };
     if(winc) winc.onclick=()=>{ b.w=Math.min(1.8,Math.round((b.w+0.1)*10)/10); posManual=false; renderCanvas(); rebuildFinal(); };
     up.onclick=()=>{ if(i>0){[canvas[i-1],canvas[i]]=[canvas[i],canvas[i-1]]; posManual=false; renderCanvas(); rebuildFinal();} };
@@ -455,6 +473,26 @@ function renderLoraChips(){
   });
 }
 
+/* ---------- 骨架（结构化提示词模板） ---------- */
+function renderSkel(){
+  const row=$("skelRow"); row.innerHTML="";
+  const list=(LIB.skeletons||[]);
+  if(!list.length){ row.style.display="none"; return; }
+  row.style.display="flex";
+  const lbl=document.createElement("span"); lbl.className="lbl"; lbl.textContent="🦴 骨架一键搭：";
+  row.appendChild(lbl);
+  list.forEach(s=>{
+    const b=document.createElement("button"); b.className="skel";
+    b.textContent=s.emoji+" "+s.name; b.title="按「"+(s.order||"主体→细节→动作→场景→光影→镜头→风格")+"」结构填入画布";
+    b.onclick=()=>loadSkeleton(s);
+    row.appendChild(b);
+  });
+}
+function loadSkeleton(s){
+  if(s.base){ curBase=s.base; localStorage.setItem("ib_base",curBase); renderBases(); applyBase(); }
+  canvas=(s.blocks||[]).map(b=>({cat:b.cat,t:b.t,zh:b.zh||"",w:1.0}));
+  posManual=false; rebuildFinal(); renderCanvas();
+}
 /* ---------- 配方 ---------- */
 function renderRecipes(){
   const box=$("recipeList"); box.innerHTML="";

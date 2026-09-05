@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "_comment": "灵感积木词库：分层标签块 + 底模提示词档案 + 成熟风格配方。t=英文标签，zh=可直接出图的中文提示词（干净无注释，supports_cn 底模优先用它）；hot=true 表示显性高效词；质量词块的 bases 表示仅适用底模。",
+  "version": 4,
+  "_comment": "灵感积木词库：分层标签块 + 底模提示词档案 + 结构化骨架 + 成熟风格配方。t=英文标签，zh=可直接出图的中文提示词（supports_cn 底模优先用）；hot=true 显性高效词；skeletons=按结构顺序的提示词骨架；质量词块的 bases 表示仅适用底模。",
   "bases": {
     "zimage": {
       "name": "Z-Image Turbo",
@@ -131,6 +131,8 @@
       "cat": "发型·五官",
       "items": [
         { "t": "long straight black hair", "zh": "黑长直", "hot": true },
+        { "t": "bangs", "zh": "刘海", "hot": true },
+        { "t": "brown long hair", "zh": "棕色长发" },
         { "t": "long flowing hair", "zh": "飘逸长发" },
         { "t": "pixie cut", "zh": "精灵短发", "hot": true },
         { "t": "short bob hair", "zh": "齐耳短发" },
@@ -143,7 +145,9 @@
         { "t": "hair blown by wind", "zh": "风吹乱发", "hot": true },
         { "t": "silver white hair", "zh": "银白长发" },
         { "t": "brown eyes", "zh": "棕色瞳孔" },
+        { "t": "blue eyes", "zh": "蓝色眼眸" },
         { "t": "amber eyes", "zh": "琥珀色眼眸" },
+        { "t": "red eyes", "zh": "红色眼眸" },
         { "t": "sparkling glossy eyes", "zh": "水光潋滟的眼眸" },
         { "t": "narrow sharp eyes", "zh": "细长锐利的眼型" },
         { "t": "phoenix eyes", "zh": "丹凤眼" },
@@ -151,7 +155,8 @@
         { "t": "soft plump lips", "zh": "饱满柔和的唇形" },
         { "t": "sharp jawline", "zh": "清晰的下颌线" },
         { "t": "defined collarbone", "zh": "明显锁骨" },
-        { "t": "traditional hairpin", "zh": "发簪" }
+        { "t": "traditional hairpin", "zh": "发簪" },
+        { "t": "flower hair ornament", "zh": "花朵发饰", "hot": true }
       ]
     },
     {
@@ -212,7 +217,9 @@
         { "t": "fingers running through hair", "zh": "手指穿过发丝" },
         { "t": "arms outstretched, embracing wind", "zh": "张开双臂拥抱风" },
         { "t": "head tilted up, basking in sunlight", "zh": "仰头闭眼晒太阳", "hot": true },
-        { "t": "stretching out hand to camera", "zh": "伸手挡镜头" }
+        { "t": "stretching out hand to camera", "zh": "伸手挡镜头" },
+        { "t": "standing", "zh": "站立", "hot": true },
+        { "t": "holding bouquet", "zh": "双手捧花", "hot": true }
       ]
     },
     {
@@ -236,6 +243,8 @@
         { "t": "off-shoulder sweater", "zh": "一字肩毛衣" },
         { "t": "white shirt", "zh": "白衬衫" },
         { "t": "high-waist jeans", "zh": "高腰牛仔裤" },
+        { "t": "denim shorts", "zh": "牛仔短裤" },
+        { "t": "white dress", "zh": "白色连衣裙", "hot": true },
         { "t": "cargo pants", "zh": "工装裤" },
         { "t": "slip dress", "zh": "吊带裙" },
         { "t": "long flowing dress", "zh": "长摆连衣裙" },
@@ -256,6 +265,10 @@
       "cat": "场景·环境",
       "items": [
         { "t": "moonlit rooftop", "zh": "月光天台", "hot": true },
+        { "t": "by the window", "zh": "窗边", "hot": true },
+        { "t": "indoors", "zh": "室内" },
+        { "t": "forest, sun through leaves", "zh": "树林·透光" },
+        { "t": "park bench", "zh": "公园长椅" },
         { "t": "ancient palace, carved beams", "zh": "古宫殿·雕梁画栋" },
         { "t": "city overpass at night", "zh": "夜晚城市天桥", "hot": true },
         { "t": "bamboo forest", "zh": "竹林" },
@@ -386,6 +399,111 @@
         { "t": "score_9, score_8_up, score_7_up", "zh": "Pony 必带评分词", "bases": ["pony"], "hot": true },
         { "t": "source_anime", "zh": "Pony 动漫源标记", "bases": ["pony"] },
         { "t": "absurdres, incredibly absurdres", "zh": "超高分辨率词", "bases": ["illustrious", "sdxl", "anima"] }
+      ]
+    }
+  ],
+  "skeletons": [
+    {
+      "name": "写实人像",
+      "emoji": "📷",
+      "order": "主体→外观→表情→动作→光影→镜头→风格",
+      "blocks": [
+        { "cat": "主体·人物", "t": "1girl, solo", "zh": "单人少女" },
+        { "cat": "主体·人物", "t": "delicate facial features", "zh": "精致五官" },
+        { "cat": "主体·人物", "t": "detailed skin texture", "zh": "细腻皮肤质感" },
+        { "cat": "发型·五官", "t": "long straight black hair", "zh": "黑长直" },
+        { "cat": "表情·情绪", "t": "looking at viewer", "zh": "看向镜头" },
+        { "cat": "表情·情绪", "t": "gentle smile", "zh": "浅浅微笑" },
+        { "cat": "光影·氛围", "t": "soft window light", "zh": "柔和窗光" },
+        { "cat": "镜头·构图", "t": "upper body portrait", "zh": "半身像" },
+        { "cat": "镜头·构图", "t": "85mm lens", "zh": "85mm 人像镜头" },
+        { "cat": "镜头·构图", "t": "shallow depth of field, bokeh", "zh": "浅景深虚化" },
+        { "cat": "风格·质感", "t": "photorealistic photography", "zh": "写实摄影质感" },
+        { "cat": "风格·质感", "t": "film grain", "zh": "胶片颗粒" }
+      ]
+    },
+    {
+      "name": "古风人像",
+      "emoji": "🏮",
+      "order": "主体→身份→服装→发型→动作→场景→光影→镜头→风格",
+      "blocks": [
+        { "cat": "主体·人物", "t": "1girl, solo", "zh": "单人少女" },
+        { "cat": "主体·人物", "t": "classical chinese beauty", "zh": "古典东方美人" },
+        { "cat": "服装·造型", "t": "white hanfu, flowing sleeves", "zh": "白色汉服·广袖" },
+        { "cat": "发型·五官", "t": "traditional hairpin", "zh": "发簪" },
+        { "cat": "姿态·动作", "t": "hair blown by wind", "zh": "风吹乱发" },
+        { "cat": "场景·环境", "t": "ancient palace, carved beams", "zh": "古宫殿·雕梁画栋" },
+        { "cat": "光影·氛围", "t": "moonlight, cool glow", "zh": "月华清辉" },
+        { "cat": "光影·氛围", "t": "side backlight, rim light", "zh": "侧逆光·轮廓光" },
+        { "cat": "镜头·构图", "t": "full body shot", "zh": "全身照" },
+        { "cat": "风格·质感", "t": "ethereal, otherworldly", "zh": "空灵出尘" }
+      ]
+    },
+    {
+      "name": "街拍少年感",
+      "emoji": "🧢",
+      "order": "主体→发型→服装→表情→动作→场景→光影→镜头→风格",
+      "blocks": [
+        { "cat": "主体·人物", "t": "handsome tomboy girl", "zh": "中性帅气少女" },
+        { "cat": "发型·五官", "t": "pixie cut", "zh": "精灵短发" },
+        { "cat": "服装·造型", "t": "oversized hoodie", "zh": "加大连帽衫" },
+        { "cat": "姿态·动作", "t": "hands in pockets", "zh": "双手插兜" },
+        { "cat": "表情·情绪", "t": "looking at viewer", "zh": "看向镜头" },
+        { "cat": "表情·情绪", "t": "smirk", "zh": "自信坏笑" },
+        { "cat": "场景·环境", "t": "city street at night, rain", "zh": "夜雨街头" },
+        { "cat": "光影·氛围", "t": "neon glow at night", "zh": "霓虹夜色" },
+        { "cat": "镜头·构图", "t": "35mm candid", "zh": "35mm 纪实习拍" },
+        { "cat": "风格·质感", "t": "cinematic still", "zh": "电影剧照感" },
+        { "cat": "风格·质感", "t": "film grain", "zh": "胶片颗粒" }
+      ]
+    },
+    {
+      "name": "梦幻写真",
+      "emoji": "☁️",
+      "order": "主体→外观→服装→表情→动作→光影→风格→镜头",
+      "blocks": [
+        { "cat": "主体·人物", "t": "1girl, solo", "zh": "单人少女" },
+        { "cat": "发型·五官", "t": "wavy long hair", "zh": "微卷长发" },
+        { "cat": "服装·造型", "t": "white dress", "zh": "白色连衣裙" },
+        { "cat": "表情·情绪", "t": "closed eyes, serene expression", "zh": "闭眼·宁静安详" },
+        { "cat": "姿态·动作", "t": "head tilted up, basking in sunlight", "zh": "仰头闭眼晒太阳" },
+        { "cat": "光影·氛围", "t": "backlight bokeh orbs", "zh": "逆光光斑" },
+        { "cat": "风格·质感", "t": "dreamy glow, soft focus", "zh": "梦幻光晕·柔焦" },
+        { "cat": "风格·质感", "t": "heavy bloom, diffusion", "zh": "重光晕·弥散" },
+        { "cat": "镜头·构图", "t": "shallow depth of field, bokeh", "zh": "浅景深虚化" }
+      ]
+    },
+    {
+      "name": "情绪夜景",
+      "emoji": "🌃",
+      "order": "主体→表情→服装→场景→光影→镜头→风格",
+      "blocks": [
+        { "cat": "主体·人物", "t": "1girl, solo", "zh": "单人少女" },
+        { "cat": "表情·情绪", "t": "melancholy eyes", "zh": "忧郁眼神" },
+        { "cat": "服装·造型", "t": "leather jacket", "zh": "皮夹克" },
+        { "cat": "场景·环境", "t": "city street at night, rain", "zh": "夜雨街头" },
+        { "cat": "光影·氛围", "t": "streetlight in rain", "zh": "雨夜路灯" },
+        { "cat": "光影·氛围", "t": "chiaroscuro, strong contrast", "zh": "明暗强对比" },
+        { "cat": "镜头·构图", "t": "close-up face shot", "zh": "面部特写" },
+        { "cat": "镜头·构图", "t": "85mm lens", "zh": "85mm 人像镜头" },
+        { "cat": "风格·质感", "t": "film grain", "zh": "胶片颗粒" },
+        { "cat": "风格·质感", "t": "muted color palette", "zh": "低饱和色调" }
+      ]
+    },
+    {
+      "name": "风景空镜",
+      "emoji": "🌄",
+      "order": "场景→时辰→氛围→层次→镜头→风格（无人物）",
+      "blocks": [
+        { "cat": "场景·环境", "t": "under cherry blossoms, falling petals", "zh": "樱花树下·花瓣飘落" },
+        { "cat": "场景·环境", "t": "reed marsh at sunset", "zh": "黄昏芦苇荡" },
+        { "cat": "光影·氛围", "t": "golden hour", "zh": "黄金时刻" },
+        { "cat": "光影·氛围", "t": "volumetric light, god rays", "zh": "体积光·丁达尔" },
+        { "cat": "镜头·构图", "t": "negative space", "zh": "大面积留白构图" },
+        { "cat": "镜头·构图", "t": "layered depth", "zh": "前中后景层次" },
+        { "cat": "镜头·构图", "t": "35mm candid", "zh": "35mm 纪实习拍" },
+        { "cat": "风格·质感", "t": "arthouse film color grade", "zh": "文艺片调色" },
+        { "cat": "风格·质感", "t": "film grain", "zh": "胶片颗粒" }
       ]
     }
   ],
