@@ -93,6 +93,7 @@
   .sfree { flex:1; min-width:100px; border:none; border-bottom:1px dashed var(--line); background:transparent; font-size:11.8px; padding:2px 4px; outline:none; color:var(--ink); }
   .sfree:focus { border-bottom-color:var(--accent); }
   .sfree::placeholder { color:#b6bdcc; }
+  .chinthint.hintwarn { color:#e5484d; }
   /* 自由积木块 */
   .bblock { display:flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:8px; padding:4px 7px; background:#fbfcfe; font-size:12.4px; flex:0 0 auto; }
   .bblock .idx { flex:0 0 18px; height:18px; border-radius:6px; background:var(--accent); color:#fff; font-size:10.8px; display:flex; align-items:center; justify-content:center; font-weight:700; }
@@ -386,7 +387,8 @@ function renderCatNav(){
   blocks.forEach((blk,i)=>{
     const b=document.createElement("button");
     b.innerHTML = esc(blk.cat)+'<span class="n">'+(blk.items||[]).length+"</span>";
-    b.title = blk.src ? "来源 "+blk.src : "";
+    const mapped=(LIB.market_cat_map||{})[blk.cat];
+    b.title = (curLib==="market" && mapped) ? "骨架自动匹配 → "+mapped : (blk.src ? "来源 "+blk.src : "");
     b.onclick=()=>{
       const top=(groupTops[i]||0)-2;
       try{ $("tagGrid").scrollTo({top, behavior:"smooth"}); }
@@ -519,14 +521,21 @@ function loadSkel(s){
 function fillSlot(cat,it){
   let idx=selSlot;
   if(!(idx>=0 && idx<slots.length)){
-    // 自动匹配：优先填「分类适配且为空」的槽 → 分类适配的槽 → 任意空槽
-    idx=slots.findIndex(s=>s.cats.includes(cat)&&!slotHas(s));
-    if(idx<0) idx=slots.findIndex(s=>s.cats.includes(cat));
-    if(idx<0) idx=slots.findIndex(s=>!slotHas(s));
-    if(idx<0) idx=0;
+    // 自动匹配：超市 Danbooru 分组先经映射表转成精选块分类，再找适配槽
+    const mapped=(LIB.market_cat_map||{})[cat]||cat;
+    idx=slots.findIndex(s=>s.cats.includes(mapped)&&!slotHas(s));
+    if(idx<0) idx=slots.findIndex(s=>s.cats.includes(mapped));
+    if(idx<0){ hintFlash("「"+cat+"」未适配当前骨架——点槽位名锁定后即可填入"); return; }
   }
   slots[idx].items.push({t:it.t, zh:it.zh||"", cat, w:1});
   posManual=false; renderCanvas(); rebuildFinal();
+}
+let hintTimer=null;
+function hintFlash(msg){
+  const el=$("canvasHint");
+  if(hintTimer) clearTimeout(hintTimer);
+  el.textContent=msg; el.classList.add("hintwarn");
+  hintTimer=setTimeout(()=>{ el.classList.remove("hintwarn"); hintTimer=null; renderCanvas(); }, 2600);
 }
 function renderSlots(box){
   const total=slots.length, filled=slots.filter(slotHas).length;
