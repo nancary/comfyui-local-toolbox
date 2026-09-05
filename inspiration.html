@@ -6,118 +6,137 @@
 <title>灵感积木 · Inspiration Blocks</title>
 <style>
   :root {
-    --bg:#f6f7f9; --card:#ffffff; --ink:#1c2330; --sub:#68738a; --line:#e3e7ee;
-    --accent:#6d5efc; --accent2:#22b8a6; --warn:#e8912d; --hot:#f59e0b;
-    --shadow:0 1px 3px rgba(20,30,60,.07),0 8px 24px rgba(20,30,60,.06);
+    --bg:#f4f5f8; --card:#ffffff; --ink:#1a2130; --sub:#6b7690; --line:#e4e8ef;
+    --accent:#5b54e8; --accent-soft:#eeecff; --teal:#17a398; --hot:#f59e0b;
+    --shadow:0 1px 2px rgba(20,30,60,.06),0 6px 20px rgba(20,30,60,.07);
   }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:var(--bg); color:var(--ink); font:14px/1.6 "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+  html,body { height:100%; }
+  body { background:var(--bg); color:var(--ink); font:14px/1.6 "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; overflow-x:hidden; }
   button { font-family:inherit; cursor:pointer; }
-  .wrap { max-width:1560px; margin:0 auto; padding:18px 22px 60px; }
+  input,textarea,select { font-family:inherit; color:var(--ink); }
+  .wrap { max-width:1680px; margin:0 auto; padding:14px 18px 40px; }
 
   /* ===== 顶栏 ===== */
-  .topbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
-  .topbar h1 { font-size:20px; font-weight:700; letter-spacing:.5px; }
+  .topbar { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+  .topbar h1 { font-size:19px; font-weight:700; letter-spacing:.5px; }
   .topbar h1 span { color:var(--accent); }
   .topbar .sub { color:var(--sub); font-size:12.5px; }
-  .topbar .right { margin-left:auto; display:flex; gap:8px; align-items:center; }
-  .toolbtn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:9px; padding:7px 12px; font-size:13px; }
+  .topbar .right { margin-left:auto; display:flex; gap:8px; }
+  .toolbtn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:6px 12px; font-size:12.8px; white-space:nowrap; }
   .toolbtn:hover { border-color:var(--accent); color:var(--accent); }
   a.toolbtn { text-decoration:none; }
 
   /* ===== 底模条 ===== */
-  .baserow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
-  .baserow .lbl { color:var(--sub); font-size:12.5px; min-width:58px; }
-  .chip { border:1px solid var(--line); background:#fff; color:var(--ink); padding:5px 13px; border-radius:999px; cursor:pointer; font-size:12.5px; }
+  .baserow { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:8px; }
+  .baserow .lbl { color:var(--sub); font-size:12.5px; }
+  .chip { border:1px solid var(--line); background:#fff; color:var(--ink); padding:4px 13px; border-radius:999px; font-size:12.5px; }
   .chip:hover { border-color:var(--accent); }
   .chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
-  .tips { background:linear-gradient(135deg,#f4f2ff,#eefaf7); border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:14px; font-size:12.8px; color:#3c4257; }
+  .tips { background:linear-gradient(135deg,#f3f1ff,#eafaf7); border:1px solid var(--line); border-radius:10px; padding:8px 13px; margin-bottom:10px; font-size:12.6px; color:#3c4257; }
   .tips b { color:var(--accent); }
+  .tips summary { cursor:pointer; font-weight:600; }
   .tips li { margin-left:18px; }
 
-  /* ===== 主体三栏 ===== */
-  .cols { display:grid; grid-template-columns:330px 1fr 300px; gap:14px; align-items:start; }
-  @media (max-width:1200px){ .cols { grid-template-columns:1fr; } }
-  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:14px; }
+  /* ===== 主三栏（等高面板，各自内部滚动，杜绝重叠错位）===== */
+  .main { display:grid; grid-template-columns:minmax(420px,5fr) minmax(360px,4fr) minmax(320px,3.4fr); gap:12px; align-items:stretch; height:calc(100vh - 168px); min-height:600px; }
+  @media (max-width:1280px){ .main { grid-template-columns:1fr; height:auto; } }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:12px; display:flex; flex-direction:column; overflow:hidden; }
+  .panel > .phead { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex:0 0 auto; }
+  .panel > .phead h3 { font-size:14.5px; }
+  .cnt { color:var(--sub); font-size:12px; }
 
-  /* 左：标签库 */
-  .catrow { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
-  .cattab { border:1px solid var(--line); background:#fff; padding:4px 10px; border-radius:8px; font-size:12.5px; cursor:pointer; }
-  .cattab.active { background:var(--ink); color:#fff; border-color:var(--ink); }
-  #tagSearch { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:9px; font-size:13px; margin-bottom:10px; }
-  .tagpool { display:flex; flex-direction:column; gap:5px; max-height:520px; overflow-y:auto; }
-  .tagitem { display:flex; justify-content:space-between; gap:8px; border:1px solid var(--line); border-radius:9px; padding:6px 9px; cursor:pointer; font-size:12.8px; align-items:center; }
-  .tagitem:hover { border-color:var(--accent); background:#faf9ff; }
-  .tagitem .zh { flex:1; }
-  .tagitem .en { color:var(--sub); font-size:11px; text-align:right; max-width:45%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .tagitem .star { color:var(--hot); font-size:11px; margin-right:2px; }
+  /* 左：词库（分类导航 + 全量标签） */
+  .libtabs { display:flex; gap:6px; margin-bottom:8px; flex:0 0 auto; }
+  .libtab { border:1px solid var(--line); background:#fff; padding:4px 12px; border-radius:8px; font-size:12.5px; }
+  .libtab.active { background:var(--ink); color:#fff; border-color:var(--ink); }
+  .libtab:disabled { opacity:.45; cursor:not-allowed; }
+  .libbody { display:grid; grid-template-columns:148px 1fr; gap:8px; flex:1; min-height:0; }
+  .catnav { overflow-y:auto; border-right:1px solid var(--line); padding-right:4px; }
+  .catnav button { display:block; width:100%; text-align:left; border:none; background:none; padding:6px 8px; border-radius:8px; font-size:12.4px; color:var(--ink); line-height:1.35; }
+  .catnav button:hover { background:var(--accent-soft); }
+  .catnav button.active { background:var(--accent); color:#fff; }
+  .catnav button .n { float:right; color:var(--sub); font-size:11px; }
+  .catnav button.active .n { color:#d9d6ff; }
+  .taggrid { overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill,minmax(158px,1fr)); gap:6px; align-content:start; padding:2px 2px 8px; }
+  .tchip { border:1px solid var(--line); background:#fbfcfe; border-radius:9px; padding:5px 8px; cursor:pointer; line-height:1.3; }
+  .tchip:hover { border-color:var(--accent); background:var(--accent-soft); }
+  .tchip .zh { font-size:12.6px; display:block; }
+  .tchip .zh .hot { color:var(--hot); margin-right:2px; }
+  .tchip .en { color:var(--sub); font-size:10.8px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
   /* 中：画布 */
-  .canvashead { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
-  .canvashead h3 { font-size:15px; }
-  .canvashead .cnt { color:var(--sub); font-size:12px; }
-  #blocks { display:flex; flex-direction:column; gap:6px; min-height:120px; }
-  .bblock { display:flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:10px; padding:6px 9px; background:#fbfcfe; font-size:12.8px; }
-  .bblock .cat { color:var(--sub); font-size:11px; min-width:56px; }
-  .bblock .txt { flex:1; }
+  #blocks { overflow-y:auto; flex:1; min-height:0; display:flex; flex-direction:column; gap:5px; padding:2px 2px 6px; }
+  .bblock { display:flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:9px; padding:5px 8px; background:#fbfcfe; font-size:12.6px; flex:0 0 auto; }
+  .bblock .cat { color:var(--sub); font-size:10.8px; min-width:52px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bblock .txt { flex:1; line-height:1.35; }
   .bblock .txt b { color:var(--accent); }
-  .mini { border:1px solid var(--line); background:#fff; border-radius:6px; width:22px; height:22px; font-size:12px; line-height:1; }
+  .bblock .zhn { color:var(--sub); font-size:11px; display:block; }
+  .mini { border:1px solid var(--line); background:#fff; border-radius:6px; width:22px; height:22px; font-size:12px; line-height:1; flex:0 0 auto; }
   .mini:hover { border-color:var(--accent); color:var(--accent); }
   .mini.del:hover { border-color:#e5484d; color:#e5484d; }
   .bblock.dragging { opacity:.4; }
-  #dropHint { color:var(--sub); font-size:12.5px; text-align:center; padding:26px 0; border:1.5px dashed var(--line); border-radius:10px; }
-  .finalrow { margin-top:12px; }
-  .finalrow label { font-size:12.5px; color:var(--sub); display:flex; justify-content:space-between; align-items:center; }
-  #finalPos { width:100%; min-height:88px; margin-top:5px; padding:9px 11px; border:1px solid var(--line); border-radius:10px; font:12.5px/1.7 Consolas,monospace; resize:vertical; background:#fbfcfe; color:var(--ink); }
-  .negrow { margin-top:8px; }
-  #finalNeg { width:100%; min-height:44px; padding:8px 11px; border:1px solid var(--line); border-radius:10px; font:12.5px/1.7 Consolas,monospace; resize:vertical; background:#fbfcfe; }
-  .negoff { color:var(--sub); font-size:11.5px; margin-top:3px; }
+  #dropHint { color:var(--sub); font-size:12.5px; text-align:center; padding:40px 0; border:1.5px dashed var(--line); border-radius:10px; }
+  .promptbox { flex:0 0 auto; margin-top:8px; }
+  .promptbox label { font-size:12.3px; color:var(--sub); display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; }
+  textarea.ptext { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:9px; font:12.3px/1.65 Consolas,monospace; resize:vertical; background:#fbfcfe; }
+  #finalPos { min-height:74px; } #finalNeg { min-height:40px; }
+  .negoff { color:var(--sub); font-size:11.3px; margin-top:2px; }
 
-  /* LoRA 叠加 */
-  .lorarow { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
-  #loraSel { flex:1; min-width:130px; padding:7px 9px; border:1px solid var(--line); border-radius:9px; font-size:12.5px; }
-  #loraStr { width:64px; padding:7px 8px; border:1px solid var(--line); border-radius:9px; font-size:12.5px; }
+  /* LoRA 叠加（可搜索下拉） */
+  .lorabox { flex:0 0 auto; margin-top:8px; }
+  .lorarow { display:flex; gap:6px; position:relative; }
+  #loraSearch { flex:1; padding:6px 9px; border:1px solid var(--line); border-radius:8px; font-size:12.5px; }
+  #loraStr { width:58px; padding:6px 7px; border:1px solid var(--line); border-radius:8px; font-size:12.5px; }
+  #loraDrop { position:absolute; top:calc(100% + 3px); left:0; right:76px; background:#fff; border:1px solid var(--line); border-radius:9px; box-shadow:var(--shadow); max-height:240px; overflow-y:auto; z-index:30; display:none; }
+  #loraDrop div { padding:6px 10px; font-size:12.3px; cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #loraDrop div:hover { background:var(--accent-soft); }
   .lorachips { display:flex; gap:6px; flex-wrap:wrap; margin-top:7px; }
-  .lorachip { display:flex; align-items:center; gap:6px; background:#f1efff; border:1px solid #ddd9ff; border-radius:999px; padding:4px 6px 4px 11px; font-size:12px; }
-  .lorachip input { width:46px; border:1px solid #ddd9ff; border-radius:6px; font-size:11.5px; padding:2px 4px; }
+  .lorachip { display:flex; align-items:center; gap:5px; background:var(--accent-soft); border:1px solid #d9d5ff; border-radius:999px; padding:3px 5px 3px 10px; font-size:11.8px; }
+  .lorachip input { width:44px; border:1px solid #d9d5ff; border-radius:6px; font-size:11.3px; padding:2px 4px; }
 
-  /* 右：生成与配方 */
-  .genpanel .row { display:flex; gap:6px; margin-bottom:8px; }
-  .genpanel select, .genpanel input { padding:7px 9px; border:1px solid var(--line); border-radius:9px; font-size:12.5px; background:#fff; color:var(--ink); }
-  .genpanel .p2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px; }
-  .genpanel .p3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:10px; }
-  .genpanel label { font-size:11.5px; color:var(--sub); display:block; margin-bottom:2px; }
-  #genBtn { width:100%; padding:12px; border:none; border-radius:11px; background:linear-gradient(135deg,var(--accent),#8f7bff); color:#fff; font-size:15px; font-weight:700; letter-spacing:1px; }
+  /* 右：生成 */
+  .genscroll { overflow-y:auto; flex:1; min-height:0; display:flex; flex-direction:column; padding:2px 2px 6px; }
+  .gsec { border:1px solid var(--line); border-radius:10px; padding:9px 10px; margin-bottom:9px; flex:0 0 auto; }
+  .gsec .t { font-size:12.8px; font-weight:600; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+  .gsec .t .hint { font-weight:400; color:var(--sub); font-size:11px; }
+  .g2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+  .gsec label { font-size:11.3px; color:var(--sub); display:block; margin-bottom:2px; }
+  .gsec input, .gsec select { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:8px; font-size:12.5px; background:#fff; }
+  .presets { display:flex; gap:5px; flex-wrap:wrap; margin-top:7px; }
+  .preset { border:1px solid var(--line); background:#fff; border-radius:999px; padding:2px 9px; font-size:11.3px; color:var(--sub); }
+  .preset:hover { border-color:var(--accent); color:var(--accent); }
+  #genBtn { width:100%; padding:11px; border:none; border-radius:10px; background:linear-gradient(135deg,var(--accent),#8f83ff); color:#fff; font-size:14.5px; font-weight:700; letter-spacing:1px; flex:0 0 auto; }
   #genBtn:hover { filter:brightness(1.07); }
   #genBtn:disabled { opacity:.55; cursor:not-allowed; }
-  .genstatus { font-size:12.3px; color:var(--sub); margin-top:7px; min-height:18px; }
+  .genstatus { font-size:12.2px; color:var(--sub); margin:7px 0 0; min-height:17px; flex:0 0 auto; }
   .genstatus.err { color:#e5484d; }
-  #resultImg { width:100%; border-radius:11px; margin-top:9px; display:none; border:1px solid var(--line); }
+  #resultImg { width:100%; border-radius:10px; margin-top:8px; display:none; border:1px solid var(--line); }
   .resact { display:flex; gap:6px; margin-top:6px; }
 
-  /* 配方卡 */
-  .recipe { border:1px solid var(--line); border-radius:11px; padding:9px 11px; margin-bottom:8px; cursor:pointer; }
+  /* 配方 */
+  .recipe { border:1px solid var(--line); border-radius:10px; padding:8px 10px; margin-bottom:7px; cursor:pointer; flex:0 0 auto; }
   .recipe:hover { border-color:var(--accent); background:#faf9ff; }
-  .recipe .t { font-weight:600; font-size:13px; }
-  .recipe .d { color:var(--sub); font-size:11.8px; margin-top:2px; }
-  .recipe .b { display:inline-block; margin-top:4px; font-size:10.5px; background:#eefaf7; color:#17877a; border-radius:6px; padding:1px 7px; }
+  .recipe .t { font-weight:600; font-size:12.8px; }
+  .recipe .d { color:var(--sub); font-size:11.6px; margin-top:1px; }
+  .recipe .b { display:inline-block; margin-top:3px; font-size:10.4px; background:#eafaf7; color:#17877a; border-radius:6px; padding:1px 7px; }
 
   /* 实验记录 */
-  .exphead { display:flex; align-items:center; margin:22px 0 10px; }
+  .exphead { display:flex; align-items:center; margin:20px 0 10px; }
   .exphead h2 { font-size:16px; }
-  .exphead .clr { margin-left:auto; }
   .expgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; }
   .expcard { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:var(--shadow); }
   .expcard img { width:100%; aspect-ratio:1/1.15; object-fit:cover; cursor:pointer; display:block; }
   .expcard .meta { padding:8px 10px; font-size:11.8px; }
-  .expcard .meta .b { color:var(--accent2); font-weight:600; }
+  .expcard .meta .b { color:var(--teal); font-weight:600; }
   .expcard .meta .p { color:var(--sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .expcard .ops { display:flex; gap:4px; padding:0 10px 9px; align-items:center; }
   .stars { color:#d9dde5; font-size:15px; cursor:pointer; letter-spacing:1px; }
   .stars .on { color:var(--hot); }
   .expcard .ops .mini { margin-left:auto; }
-  .empty { color:var(--sub); text-align:center; padding:30px; font-size:13px; }
-  .banner { background:#fff7e8; border:1px solid #f2d9a6; color:#7a5416; border-radius:10px; padding:9px 14px; font-size:13px; margin-bottom:12px; display:none; }
+  .empty { color:var(--sub); text-align:center; padding:28px; font-size:13px; }
+  .banner { background:#fff7e8; border:1px solid #f2d9a6; color:#7a5416; border-radius:10px; padding:8px 13px; font-size:12.8px; margin-bottom:10px; display:none; }
 </style>
 </head>
 <body>
@@ -126,101 +145,123 @@
 
   <div class="topbar">
     <h1>灵感积木 <span>Blocks</span></h1>
-    <span class="sub">分层标签像搭积木一样堆出画面 → 一键试跑 → 记录实验</span>
-    <div class="right">
-      <a class="toolbtn" href="/gallery.html">← 返回图鉴</a>
-    </div>
+    <span class="sub">分类标签像搭积木一样堆出画面 → 一键试跑 → 记录实验 · 词库参考「Danbooru 标签超市」</span>
+    <div class="right"><a class="toolbtn" href="/gallery.html">← 返回图鉴</a></div>
   </div>
 
   <div class="baserow" id="baseRow"><span class="lbl">底模</span></div>
-  <div class="tips" id="tips"></div>
+  <details class="tips" id="tips"><summary>底模提示词特点</summary><ul></ul></details>
 
-  <div class="cols">
-    <!-- 左：标签库 -->
+  <div class="main">
+    <!-- 左：词库 -->
     <div class="panel">
-      <div class="catrow" id="catRow"></div>
-      <input id="tagSearch" type="text" placeholder="搜索标签（中文/英文都行）…">
-      <div class="tagpool" id="tagPool"></div>
+      <div class="phead">
+        <h3>📚 标签库</h3>
+        <span class="cnt" id="libCnt"></span>
+        <div class="libtabs" style="margin-left:auto;margin-bottom:0">
+          <button class="libtab active" id="tabCurated" onclick="switchLib('curated')">精选词库</button>
+          <button class="libtab" id="tabMarket" onclick="switchLib('market')">标签超市</button>
+        </div>
+      </div>
+      <div class="libbody">
+        <div class="catnav" id="catNav"></div>
+        <div class="taggrid" id="tagGrid"></div>
+      </div>
     </div>
 
     <!-- 中：积木画布 -->
     <div class="panel">
-      <div class="canvashead">
+      <div class="phead">
         <h3>🧩 积木画布</h3>
         <span class="cnt" id="blockCnt">0 块</span>
         <button class="toolbtn" style="margin-left:auto" onclick="clearCanvas()">清空</button>
       </div>
       <div id="blocks"></div>
-      <div class="finalrow">
-        <label><span>最终提示词（自动拼接，可手改；手改后以你改的为准）</span>
+      <div class="promptbox">
+        <label><span>最终提示词（自动拼接，可手改）</span>
           <button class="mini" title="重新按积木拼接" onclick="rebuildFinal(true)">↻</button></label>
-        <textarea id="finalPos" spellcheck="false"></textarea>
+        <textarea id="finalPos" class="ptext" spellcheck="false"></textarea>
       </div>
-      <div class="negrow">
-        <label>负面提示词 <span id="negNote"></span></label>
-        <textarea id="finalNeg" spellcheck="false"></textarea>
+      <div class="promptbox">
+        <label><span>负面提示词 <span id="negNote"></span></span></label>
+        <textarea id="finalNeg" class="ptext" spellcheck="false"></textarea>
         <div class="negoff" id="negOff" style="display:none">ℹ 该底模 cfg=1，负面词不参与采样（占位无副作用）</div>
       </div>
-      <div class="lorarow">
-        <select id="loraSel"><option value="">+ 叠加 LoRA（可选）…</option></select>
-        <input id="loraStr" type="text" value="0.8" title="LoRA 强度">
-        <button class="toolbtn" onclick="addLora()">加入</button>
+      <div class="lorabox">
+        <div class="lorarow">
+          <input id="loraSearch" type="text" placeholder="搜索并叠加 LoRA（输入名称过滤）…" autocomplete="off">
+          <input id="loraStr" type="text" value="0.8" title="LoRA 强度">
+        </div>
+        <div id="loraDrop"></div>
+        <div class="lorachips" id="loraChips"></div>
       </div>
-      <div class="lorachips" id="loraChips"></div>
     </div>
 
-    <!-- 右：生成 + 配方 -->
-    <div class="panel genpanel">
-      <div class="p2">
-        <div><label>尺寸</label>
-          <select id="sizeSel">
-            <option value="832x1216">832×1216 竖</option>
-            <option value="768x1024">768×1024 竖</option>
-            <option value="1024x1024">1024×1024 方</option>
-            <option value="1216x832">1216×832 横</option>
-            <option value="1080x1920">1080×1920 手机竖</option>
-          </select></div>
-        <div><label>种子（留空随机）</label><input id="seedIn" type="text" placeholder="随机"></div>
-      </div>
-      <div class="p3">
-        <div><label>步数</label><input id="stepsIn" type="text"></div>
-        <div><label>CFG</label><input id="cfgIn" type="text"></div>
-        <div><label>采样器</label><input id="samplerIn" type="text"></div>
-      </div>
-      <button id="genBtn" onclick="generate()">⚡ 试跑这张灵感</button>
-      <div class="genstatus" id="genStatus"></div>
-      <img id="resultImg" alt="生成结果">
-      <div class="resact" id="resAct" style="display:none">
-        <button class="toolbtn" onclick="rerollSeed()">🎲 换种子再跑</button>
-        <button class="toolbtn" onclick="openBig()">🔍 看大图</button>
-      </div>
+    <!-- 右：生成 -->
+    <div class="panel">
+      <div class="genscroll">
+        <div class="gsec">
+          <div class="t">🖼️ 画面尺寸 <span class="hint">宽高可自由输入</span></div>
+          <div class="g2">
+            <div><label>宽（256–2048）</label><input id="wIn" type="number" min="256" max="2048" step="8" value="832"></div>
+            <div><label>高（256–2048）</label><input id="hIn" type="number" min="256" max="2048" step="8" value="1216"></div>
+          </div>
+          <div class="presets">
+            <button class="preset" onclick="setSize(832,1216)">832×1216</button>
+            <button class="preset" onclick="setSize(768,1024)">768×1024</button>
+            <button class="preset" onclick="setSize(1024,1024)">1024 方</button>
+            <button class="preset" onclick="setSize(1216,832)">1216×832</button>
+            <button class="preset" onclick="setSize(1080,1920)">1080×1920 手机</button>
+            <button class="preset" onclick="setSize(1440,1440)">1440 方</button>
+          </div>
+        </div>
+        <div class="gsec">
+          <div class="t">⚙️ 采样参数 <span class="hint">随底模预填，可改</span></div>
+          <div class="g3" style="margin-bottom:6px">
+            <div><label>步数</label><input id="stepsIn" type="text"></div>
+            <div><label>CFG</label><input id="cfgIn" type="text"></div>
+            <div><label>采样器</label><input id="samplerIn" type="text"></div>
+          </div>
+          <div><label>种子（留空随机）</label><input id="seedIn" type="text" placeholder="随机"></div>
+        </div>
+        <button id="genBtn" onclick="generate()">⚡ 试跑这张灵感</button>
+        <div class="genstatus" id="genStatus"></div>
+        <img id="resultImg" alt="生成结果">
+        <div class="resact" id="resAct" style="display:none">
+          <button class="toolbtn" onclick="rerollSeed()">🎲 换种子再跑</button>
+          <button class="toolbtn" onclick="openBig()">🔍 看大图</button>
+        </div>
 
-      <div style="margin:16px 0 8px; font-size:13.5px; font-weight:700;">📋 成熟风格配方 <span style="color:var(--sub);font-weight:400;font-size:11.5px">点击整套装入画布</span></div>
-      <div id="recipeList"></div>
+        <div class="gsec" style="margin-top:12px">
+          <div class="t">📋 成熟风格配方 <span class="hint">点击整套装入画布</span></div>
+          <div id="recipeList"></div>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- 实验记录 -->
   <div class="exphead">
     <h2>🧪 实验记录 <span class="cnt" id="expCnt" style="color:var(--sub);font-size:12.5px"></span></h2>
-    <button class="toolbtn clr" onclick="clearIdeas()">清空记录</button>
+    <button class="toolbtn" style="margin-left:auto" onclick="clearIdeas()">清空记录</button>
   </div>
   <div class="expgrid" id="expGrid"></div>
 </div>
 
 <script>
 "use strict";
-let LIB = null, LORAS = [];
+let LIB = null, SM = null, LORAS = [];
 let curBase = localStorage.getItem("ib_base") || "zimage";
-let curCat = 0;
-let canvas = [];          // [{cat, t, w}]
-let loras = [];           // [{name, strength}]
-let negManual = false;    // 用户手改过负面词就不再自动覆盖
-let posManual = false;    // 用户手改过最终提示词
-let lastResult = null;    // {img, seed, record}
+let curLib = "curated";      // curated | market
+let curBlk = 0;              // 当前词库块索引
+let canvas = [];             // [{cat, t, zh, w}]
+let loras = [];              // [{name, strength}]
+let negManual = false, posManual = false;
+let lastResult = null;
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const baseName = k => ((LIB.bases||{})[k]||{}).name || k;
 
 async function jget(u){ const r = await fetch(u); if(!r.ok) throw new Error(u+" -> "+r.status); return r.json(); }
 async function jpost(u, obj){ const r = await fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(obj)}); return r.json(); }
@@ -229,8 +270,10 @@ async function jpost(u, obj){ const r = await fetch(u,{method:"POST",headers:{"C
 async function init(){
   if(location.protocol === "file:") $("fileHint").style.display = "block";
   try { LIB = await jget("/prompt_library.json"); } catch(e){ LIB = {bases:{},blocks:[],recipes:[]}; }
+  try { SM = await jget("/supermarket_tags.json"); } catch(e){ SM = null; }
   try { const d = await jget("/loras.json"); LORAS = Array.isArray(d) ? d : (d.loras||[]); } catch(e){ LORAS = []; }
-  renderBases(); renderCats(); renderTags(); renderRecipes(); renderLoraSel(); applyBase(true); renderExps();
+  renderBases(); renderCatNav(); renderTags(); renderRecipes(); applyBase(true); renderExps();
+  document.addEventListener("click", e=>{ if(!$("loraDrop").contains(e.target) && e.target!==$("loraSearch")) $("loraDrop").style.display="none"; });
 }
 
 /* ---------- 底模 ---------- */
@@ -240,7 +283,7 @@ function renderBases(){
   Object.keys(LIB.bases||{}).forEach(k=>{
     const b = document.createElement("button");
     b.className = "chip"+(k===curBase?" active":"");
-    b.textContent = (LIB.bases[k]||{}).name || k;
+    b.textContent = baseName(k);
     b.onclick = ()=>{ curBase=k; localStorage.setItem("ib_base",k); posManual=false; negManual=false;
       renderBases(); applyBase(); };
     row.appendChild(b);
@@ -248,70 +291,74 @@ function renderBases(){
 }
 function applyBase(initMode){
   const bp = (LIB.bases||{})[curBase] || {};
-  $("tips").innerHTML = "<b>"+esc(bp.name||curBase)+" 的提示词特点：</b><ul>"+
-    (bp.tips||[]).map(t=>"<li>"+esc(t)+"</li>").join("")+"</ul>";
+  $("tips").querySelector("ul").innerHTML = "<b>"+esc(baseName(curBase))+"：</b>"+
+    (bp.tips||[]).map(t=>"<li>"+esc(t)+"</li>").join("");
   const p = bp.params||{};
   $("stepsIn").value = p.steps!=null?p.steps:"";
   $("cfgIn").value = p.cfg!=null?p.cfg:"";
   $("samplerIn").value = p.sampler||"";
   if(!negManual) $("finalNeg").value = bp.default_neg||"";
-  $("negOff").style.display = (parseFloat(p.cfg)===1) ? "block":"none";
-  $("negNote").textContent = (parseFloat(p.cfg)===1) ? "（cfg=1 不生效）" : "";
+  const cfg1 = parseFloat(p.cfg)===1;
+  $("negOff").style.display = cfg1 ? "block":"none";
+  $("negNote").textContent = cfg1 ? "（cfg=1 不生效）" : "";
   if(!initMode && !posManual) rebuildFinal();
-  renderTags(); renderCanvas();
 }
 
-/* ---------- 标签库 ---------- */
-function renderCats(){
-  const row = $("catRow"); row.innerHTML="";
-  (LIB.blocks||[]).forEach((blk,i)=>{
+/* ---------- 词库 ---------- */
+function libBlocks(){
+  if(curLib==="market") return (SM&&SM.blocks)||[];
+  return (LIB.blocks||[]);
+}
+function switchLib(lib){
+  if(lib==="market" && !SM){ alert("标签超市词库还未导入。\n在工具目录运行：python import_supermarket.py"); return; }
+  curLib = lib; curBlk = 0;
+  $("tabCurated").classList.toggle("active", lib==="curated");
+  $("tabMarket").classList.toggle("active", lib==="market");
+  renderCatNav(); renderTags();
+}
+function renderCatNav(){
+  const nav = $("catNav"); nav.innerHTML="";
+  const blocks = libBlocks();
+  const total = blocks.reduce((s,b)=>s+(b.items||[]).length,0);
+  $("libCnt").textContent = blocks.length ? (blocks.length+" 组 · "+total+" 标签") : "";
+  blocks.forEach((blk,i)=>{
     const b=document.createElement("button");
-    b.className="cattab"+(i===curCat?" active":"");
-    b.textContent=blk.cat;
-    b.onclick=()=>{ curCat=i; renderCats(); renderTags(); };
-    row.appendChild(b);
+    b.className = i===curBlk?"active":"";
+    b.innerHTML = esc(blk.cat)+'<span class="n">'+(blk.items||[]).length+"</span>";
+    b.title = blk.src ? "来源 "+blk.src : "";
+    b.onclick=()=>{ curBlk=i; renderCatNav(); renderTags(); };
+    nav.appendChild(b);
   });
 }
 function renderTags(){
-  const pool=$("tagPool"); pool.innerHTML="";
-  const q=($("tagSearch").value||"").toLowerCase().trim();
-  const items=[];
-  (LIB.blocks||[]).forEach((blk,ci)=>{
-    (blk.items||[]).forEach(it=>{
-      if(q && !(it.t.toLowerCase().includes(q) || (it.zh||"").toLowerCase().includes(q))) return;
-      items.push({ci, it});
-    });
+  const grid=$("tagGrid"); grid.innerHTML="";
+  const blk = libBlocks()[curBlk];
+  if(!blk){ grid.innerHTML='<div class="empty">暂无标签</div>'; return; }
+  (blk.items||[]).forEach(it=>{
+    const d=document.createElement("div"); d.className="tchip";
+    d.title = it.t;
+    d.innerHTML = '<span class="zh">'+(it.hot?'<span class="hot">★</span>':"")+esc(it.zh||it.t)+'</span>'+
+      (it.zh && it.zh!==it.t ? '<span class="en">'+esc(it.t)+"</span>" : "");
+    d.onclick=()=>addBlock(blk.cat,it);
+    grid.appendChild(d);
   });
-  if(!q && LIB.blocks[curCat]) {
-    LIB.blocks[curCat].items.forEach(it=>pool.appendChild(tagEl(curCat,it)));
-  } else {
-    items.slice(0,80).forEach(x=>pool.appendChild(tagEl(x.ci,x.it)));
-    if(!items.length) pool.innerHTML='<div class="empty">没有匹配的标签</div>';
-  }
 }
-function tagEl(ci,it){
-  const d=document.createElement("div"); d.className="tagitem";
-  d.innerHTML='<span class="star">'+(it.hot?"★":"")+'</span><span class="zh">'+esc(it.zh)+"</span>"+
-    '<span class="en" title="'+esc(it.t)+'">'+esc(it.t)+"</span>";
-  d.onclick=()=>addBlock(ci,it);
-  return d;
-}
-$("tagSearch").addEventListener("input", renderTags);
 
 /* ---------- 画布 ---------- */
-function addBlock(ci,it){
-  canvas.push({cat:(LIB.blocks[ci]||{}).cat||"", t:it.t, w:1.0});
+function addBlock(cat,it){
+  canvas.push({cat, t:it.t, zh:it.zh||"", w:1.0});
   posManual=false; rebuildFinal(); renderCanvas();
 }
 function renderCanvas(){
   const box=$("blocks"); box.innerHTML="";
   $("blockCnt").textContent=canvas.length+" 块";
-  if(!canvas.length){ box.innerHTML='<div id="dropHint">从左侧点标签，或右侧装一套风格配方</div>'; return; }
+  if(!canvas.length){ box.innerHTML='<div id="dropHint">从左侧标签库点选积木，或装一套右侧风格配方</div>'; return; }
   const ws = ((LIB.bases||{})[curBase]||{}).weight_syntax;
   canvas.forEach((b,i)=>{
     const d=document.createElement("div"); d.className="bblock"; d.draggable=true;
     d.innerHTML='<span class="cat">'+esc(b.cat)+'</span>'+
-      '<span class="txt">'+(ws==="paren"&&b.w!==1?'<b>(':'')+esc(b.t)+(ws==="paren"&&b.w!==1?":"+b.w+")</b>":"")+"</span>"+
+      '<span class="txt"><span class="zhn">'+esc(b.zh||"")+"</span>"+
+      (ws==="paren"&&b.w!==1?'<b>(':'')+esc(b.t)+(ws==="paren"&&b.w!==1?":"+b.w+")</b>":"")+"</span>"+
       (ws==="paren"?'<button class="mini" title="权重-">－</button><button class="mini" title="权重+">＋</button>':"")+
       '<button class="mini" title="上移">↑</button><button class="mini" title="下移">↓</button>'+
       '<button class="mini del" title="移除">✕</button>';
@@ -336,8 +383,6 @@ function renderCanvas(){
 function clearCanvas(){ canvas=[]; posManual=false; rebuildFinal(); renderCanvas(); }
 
 function ponyAutoPrefix(text){
-  const bp=(LIB.bases||{})[curBase]||{};
-  if(bp.weight_syntax==="paren" && /pony/i.test(bp.name||"")===false && curBase!=="pony") return text;
   if(curBase!=="pony") return text;
   if(/score_9/.test(text)) return text;
   return "score_9, score_8_up, score_7_up, "+text;
@@ -358,20 +403,28 @@ function rebuildFinal(force){
 $("finalPos").addEventListener("input", ()=>{ posManual=true; });
 $("finalNeg").addEventListener("input", ()=>{ negManual=true; });
 
-/* ---------- LoRA ---------- */
-function renderLoraSel(){
-  const sel=$("loraSel"); sel.innerHTML='<option value="">+ 叠加 LoRA（可选）…</option>';
-  LORAS.forEach(l=>{
-    const o=document.createElement("option"); o.value=l.name;
-    o.textContent=(l.name||"").split(/[\\/]/).pop();
-    sel.appendChild(o);
+/* ---------- LoRA 可搜索下拉 ---------- */
+function renderLoraDrop(q){
+  const drop=$("loraDrop"); drop.innerHTML="";
+  const kw=(q||"").toLowerCase().trim();
+  const list=LORAS.filter(l=>!kw || (l.name||"").toLowerCase().includes(kw)).slice(0,60);
+  if(!list.length){ drop.innerHTML='<div style="color:var(--sub)">没有匹配的 LoRA</div>'; }
+  list.forEach(l=>{
+    const d=document.createElement("div");
+    const short=(l.name||"").split(/[\\/]/).pop();
+    d.textContent=short; d.title=l.name||short;
+    d.onclick=()=>{ addLora(l.name); $("loraDrop").style.display="none"; $("loraSearch").value=""; };
+    drop.appendChild(d);
   });
+  drop.style.display="block";
 }
-function addLora(){
-  const name=$("loraSel").value; if(!name) return;
+$("loraSearch").addEventListener("input", e=>renderLoraDrop(e.target.value));
+$("loraSearch").addEventListener("focus", e=>renderLoraDrop(e.target.value));
+function addLora(name){
+  if(!name) return;
   let s=parseFloat($("loraStr").value); if(isNaN(s)) s=0.8; s=Math.max(0,Math.min(2,s));
-  if(loras.some(l=>l.name===name)) { $("loraSel").value=""; return; }
-  loras.push({name,strength:s}); $("loraSel").value=""; renderLoraChips();
+  if(loras.some(l=>l.name===name)){ return; }
+  loras.push({name,strength:s}); renderLoraChips();
 }
 function renderLoraChips(){
   const box=$("loraChips"); box.innerHTML="";
@@ -392,14 +445,14 @@ function renderRecipes(){
   (LIB.recipes||[]).forEach(r=>{
     const d=document.createElement("div"); d.className="recipe";
     d.innerHTML='<div class="t">'+r.emoji+" "+esc(r.name)+'</div><div class="d">'+esc(r.desc)+"</div>"+
-      '<span class="b">'+esc((LIB.bases[r.base]||{}).name||r.base)+"</span>";
+      '<span class="b">'+esc(baseName(r.base))+"</span>";
     d.onclick=()=>loadRecipe(r);
     box.appendChild(d);
   });
 }
 function loadRecipe(r){
   curBase=r.base; localStorage.setItem("ib_base",curBase); renderBases();
-  canvas=(r.blocks||[]).map(b=>({cat:b.cat,t:b.t,w:1.0}));
+  canvas=(r.blocks||[]).map(b=>({cat:b.cat,t:b.t,zh:b.zh||"",w:1.0}));
   negManual=false; posManual=false;
   applyBase(); rebuildFinal(); renderCanvas();
   $("finalPos").value=r.pos||joinPos();   // 配方带完整成句，直接用
@@ -409,9 +462,11 @@ function loadRecipe(r){
 
 /* ---------- 生成 ---------- */
 function parseSize(){
-  const [w,h]=($("sizeSel").value||"832x1216").split("x").map(Number);
-  return {w:w||832,h:h||1216};
+  let w=parseInt($("wIn").value,10)||832, h=parseInt($("hIn").value,10)||1216;
+  w=Math.max(256,Math.min(2048,w)); h=Math.max(256,Math.min(2048,h));
+  return {w,h};
 }
+function setSize(w,h){ $("wIn").value=w; $("hIn").value=h; }
 async function generate(){
   if(location.protocol==="file:"){ alert("file:// 下无法生成——请运行 python start.py 后从 http://127.0.0.1:8090/inspiration.html 打开"); return; }
   const pos=$("finalPos").value.trim();
@@ -447,8 +502,8 @@ async function generate(){
 async function saveIdea(body,r){
   await jpost("/api/ideas",{op:"save",record:{
     base:body.base, pos:body.pos, neg:body.neg, loras:body.loras,
-    img:r.img, seed:r.seed, params:r.used||{},
-    blocks:canvas.map(b=>({cat:b.cat,t:b.t,w:b.w})),
+    img:r.img, seed:r.seed, params:r.used||{width:body.width,height:body.height},
+    blocks:canvas.map(b=>({cat:b.cat,t:b.t,zh:b.zh||"",w:b.w})),
   }});
 }
 function setStatus(msg,err){ const el=$("genStatus"); el.textContent=msg; el.className="genstatus"+(err?" err":""); }
@@ -465,12 +520,11 @@ async function renderExps(){
   ideas.forEach(rec=>{
     const d=document.createElement("div"); d.className="expcard";
     d.innerHTML='<img src="'+esc(rec.img)+'?t='+Date.now()+'" loading="lazy" alt="">'+
-      '<div class="meta"><span class="b">'+esc((LIB.bases[rec.base]||{}).name||rec.base)+"</span>"+
+      '<div class="meta"><span class="b">'+esc(baseName(rec.base))+"</span>"+
       '<span style="color:var(--sub)"> · '+esc(rec.created_at||"")+"</span>"+
       '<div class="p" title="'+esc(rec.pos)+"\">"+esc(rec.pos)+"</div></div>"+
       '<div class="ops"><span class="stars" title="点击评分">'+starsHtml(rec.rating||0)+"</span>"+
       '<button class="mini" title="载入画布">↺</button><button class="mini del" title="删除">✕</button></div>';
-    const [stars,load,del]=d.querySelectorAll(".ops .mini, .stars, .ops button");
     const [st]=d.querySelectorAll(".stars");
     st.onclick=e=>{
       const idx=[...st.children].indexOf(e.target);
@@ -480,12 +534,12 @@ async function renderExps(){
     const [loadBtn]=d.querySelectorAll('.ops button[title="载入画布"]');
     loadBtn.onclick=()=>{
       curBase=rec.base; localStorage.setItem("ib_base",curBase); renderBases();
-      canvas=(rec.blocks&&rec.blocks.length)?rec.blocks.map(b=>({cat:b.cat,t:b.t,w:b.w||1})):[];
+      canvas=(rec.blocks&&rec.blocks.length)?rec.blocks.map(b=>({cat:b.cat,t:b.t,zh:b.zh||"",w:b.w||1})):[];
       posManual=false; negManual=true;
       applyBase(); renderCanvas();
       $("finalPos").value=rec.pos||joinPos();
       $("finalNeg").value=rec.neg||"";
-      if(rec.params&&rec.params.width){ $("sizeSel").value=rec.params.width+"x"+rec.params.height; }
+      if(rec.params&&rec.params.width){ setSize(rec.params.width,rec.params.height||1216); }
       window.scrollTo({top:0,behavior:"smooth"});
     };
     const [delBtn]=d.querySelectorAll('.ops button[title="删除"]');

@@ -41,3 +41,7 @@ annotations.json
 # Inspiration tool generated data (personal experiments)
 experiments.json
 experiments/
+
+# Supermarket tag library (downloaded at runtime, AGPL data — do NOT commit)
+supermarket_tags.json
+_sm_tmp/
