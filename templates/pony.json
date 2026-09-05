@@ -1,0 +1,409 @@
+{
+ "last_node_id": 7,
+ "last_link_id": 9,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "CheckpointLoaderSimple",
+   "pos": [
+    60,
+    300
+   ],
+   "size": [
+    210,
+    46
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "ckpt_name",
+     "type": "COMBO",
+     "link": null,
+     "widget": {
+      "name": "ckpt_name"
+     }
+    }
+   ],
+   "outputs": [
+    {
+     "name": "MODEL",
+     "type": "MODEL",
+     "links": [
+      6
+     ],
+     "slot_index": 0
+    },
+    {
+     "name": "CLIP",
+     "type": "CLIP",
+     "links": [
+      7,
+      8
+     ],
+     "slot_index": 1
+    },
+    {
+     "name": "VAE",
+     "type": "VAE",
+     "links": [
+      0
+     ],
+     "slot_index": 2
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CheckpointLoaderSimple"
+   },
+   "widgets_values": [
+    "ponyDiffusionV6XL_v6StartWithThisOne.safetensors"
+   ]
+  },
+  {
+   "id": 2,
+   "type": "CLIPTextEncode",
+   "pos": [
+    330,
+    60
+   ],
+   "size": [
+    210,
+    46
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 7
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      1
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "masterpiece, best quality, 1girl, solo"
+   ]
+  },
+  {
+   "id": 3,
+   "type": "CLIPTextEncode",
+   "pos": [
+    330,
+    160
+   ],
+   "size": [
+    210,
+    46
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "clip",
+     "type": "CLIP",
+     "link": 8
+    }
+   ],
+   "outputs": [
+    {
+     "name": "CONDITIONING",
+     "type": "CONDITIONING",
+     "links": [
+      2
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "CLIPTextEncode"
+   },
+   "widgets_values": [
+    "lowres, bad anatomy, bad hands, watermark, text"
+   ]
+  },
+  {
+   "id": 4,
+   "type": "EmptyLatentImage",
+   "pos": [
+    330,
+    480
+   ],
+   "size": [
+    210,
+    46
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "width",
+     "type": "COMBO",
+     "link": null,
+     "widget": {
+      "name": "width"
+     }
+    },
+    {
+     "name": "height",
+     "type": "COMBO",
+     "link": null,
+     "widget": {
+      "name": "height"
+     }
+    },
+    {
+     "name": "batch_size",
+     "type": "COMBO",
+     "link": null,
+     "widget": {
+      "name": "batch_size"
+     }
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      3
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "EmptyLatentImage"
+   },
+   "widgets_values": [
+    768,
+    1024,
+    1
+   ]
+  },
+  {
+   "id": 5,
+   "type": "KSampler",
+   "pos": [
+    600,
+    300
+   ],
+   "size": [
+    210,
+    46
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "model",
+     "type": "MODEL",
+     "link": 6
+    },
+    {
+     "name": "positive",
+     "type": "CONDITIONING",
+     "link": 1
+    },
+    {
+     "name": "negative",
+     "type": "CONDITIONING",
+     "link": 2
+    },
+    {
+     "name": "latent_image",
+     "type": "LATENT",
+     "link": 3
+    }
+   ],
+   "outputs": [
+    {
+     "name": "LATENT",
+     "type": "LATENT",
+     "links": [
+      4
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "KSampler"
+   },
+   "widgets_values": [
+    1234567890,
+    "randomize",
+    30,
+    7.0,
+    "euler",
+    "normal",
+    1.0
+   ]
+  },
+  {
+   "id": 6,
+   "type": "VAEDecode",
+   "pos": [
+    860,
+    300
+   ],
+   "size": [
+    210,
+    46
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "samples",
+     "type": "LATENT",
+     "link": 4
+    },
+    {
+     "name": "vae",
+     "type": "VAE",
+     "link": 0
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      5
+     ],
+     "slot_index": 0
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "VAEDecode"
+   },
+   "widgets_values": []
+  },
+  {
+   "id": 7,
+   "type": "SaveImage",
+   "pos": [
+    1120,
+    300
+   ],
+   "size": [
+    210,
+    46
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 5
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "lora_recipe"
+   ]
+  }
+ ],
+ "links": [
+  [
+   0,
+   1,
+   2,
+   6,
+   1,
+   "VAE"
+  ],
+  [
+   1,
+   2,
+   0,
+   5,
+   1,
+   "CONDITIONING"
+  ],
+  [
+   2,
+   3,
+   0,
+   5,
+   2,
+   "CONDITIONING"
+  ],
+  [
+   3,
+   4,
+   0,
+   5,
+   3,
+   "LATENT"
+  ],
+  [
+   4,
+   5,
+   0,
+   6,
+   0,
+   "LATENT"
+  ],
+  [
+   5,
+   6,
+   0,
+   7,
+   0,
+   "IMAGE"
+  ],
+  [
+   6,
+   1,
+   0,
+   5,
+   0,
+   "MODEL"
+  ],
+  [
+   7,
+   1,
+   1,
+   2,
+   0,
+   "CLIP"
+  ],
+  [
+   8,
+   1,
+   1,
+   3,
+   0,
+   "CLIP"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "name": "lora_recipe",
+  "base": "pony"
+ },
+ "version": 0.4
+}

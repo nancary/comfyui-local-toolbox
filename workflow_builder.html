@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LoRA 工作流构建器</title>
+<style>
+:root{
+  --bg:#f1f5f9; --card:#ffffff; --line:#e2e8f0; --text:#0f172a; --sub:#64748b;
+  --accent:#4f46e5; --accent2:#0ea5e9; --ok:#16a34a; --warn:#d97706; --pill:#eef2ff;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{background:var(--bg); color:var(--text); font:14px/1.6 "PingFang SC","Microsoft YaHei",system-ui,sans-serif;}
+header{display:flex; align-items:center; gap:14px; padding:14px 24px; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5;}
+header h1{font-size:17px; font-weight:700;}
+header .sub{color:var(--sub); font-size:12px;}
+.badge{margin-left:auto; font-size:12px; padding:4px 12px; border-radius:999px; font-weight:600;}
+.badge.ok{background:#dcfce7; color:var(--ok);}
+.badge.bad{background:#fee2e2; color:#dc2626;}
+main{display:grid; grid-template-columns:300px 340px 1fr; gap:14px; padding:16px 24px; align-items:start;}
+.panel{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; box-shadow:0 1px 2px rgba(0,0,0,.03);}
+.panel h2{font-size:13px; font-weight:700; margin-bottom:10px; color:var(--text); display:flex; align-items:center; gap:6px;}
+.panel h2 .n{background:var(--accent); color:#fff; font-size:10px; padding:1px 7px; border-radius:999px;}
+label{font-size:12px; color:var(--sub); display:block; margin:8px 0 4px;}
+input[type=text], textarea, select{width:100%; border:1px solid var(--line); border-radius:8px; padding:7px 9px; font:inherit; background:#fff; color:var(--text);}
+textarea{resize:vertical; min-height:60px; font-size:12.5px; font-family:Consolas,Menlo,monospace;}
+input:focus, textarea:focus, select:focus{outline:2px solid #c7d2fe; border-color:var(--accent);}
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:6px; border:1px solid var(--line); background:#fff; color:var(--text); border-radius:9px; padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; transition:.12s;}
+.btn:hover{border-color:var(--accent); color:var(--accent);}
+.btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+.btn.primary:hover{background:#4338ca;}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+.btn.sm{padding:4px 10px; font-size:12px; border-radius:7px;}
+
+/* 底模选择 */
+.base-grid{display:grid; gap:8px;}
+.base-item{border:2px solid var(--line); border-radius:10px; padding:10px 12px; cursor:pointer; transition:.12s;}
+.base-item:hover{border-color:#c7d2fe;}
+.base-item.sel{border-color:var(--accent); background:#eef2ff;}
+.base-item b{font-size:13px; display:block;}
+.base-item span{font-size:11.5px; color:var(--sub);}
+
+/* 参数 */
+.param-row{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.param-row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;}
+
+/* LoRA 列表 */
+.lora-search{position:relative;}
+.lora-list{max-height:340px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; margin-top:8px;}
+.lora-item{display:flex; align-items:center; gap:8px; padding:6px 9px; border-bottom:1px solid #f1f5f9; font-size:12.5px; cursor:pointer;}
+.lora-item:hover{background:#f8fafc;}
+.lora-item input{width:14px; height:14px; accent-color:var(--accent); flex:0 0 auto;}
+.lora-item .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.lora-item .dir{color:var(--sub); font-size:10.5px; background:#f1f5f9; padding:1px 6px; border-radius:5px; flex:0 0 auto;}
+.lora-item .tagflag{color:var(--accent2); font-size:10px; flex:0 0 auto;}
+.selected-box{border:1px solid var(--line); border-radius:8px; margin-top:10px; max-height:220px; overflow-y:auto;}
+.sel-item{display:flex; align-items:center; gap:8px; padding:7px 9px; border-bottom:1px solid #f1f5f9;}
+.sel-item .nm{flex:1; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.sel-item input[type=range]{width:70px; accent-color:var(--accent);}
+.sel-item .st{font-size:11px; color:var(--accent); width:32px; text-align:center;}
+.sel-item .rm{color:#dc2626; cursor:pointer; font-size:13px; border:none; background:none; padding:0 4px;}
+
+/* 提示词工具 */
+.pw-tabs{display:flex; gap:6px; margin-bottom:8px;}
+.pw-tabs button{flex:1; border:1px solid var(--line); background:#fff; border-radius:8px; padding:6px; font-size:12px; cursor:pointer; font-weight:600;}
+.pw-tabs button.on{background:var(--accent); color:#fff; border-color:var(--accent);}
+.pw-search{display:flex; gap:6px; margin:8px 0;}
+.pw-search input{flex:1;}
+.group{margin-top:10px;}
+.group h3{font-size:11.5px; color:var(--sub); margin-bottom:6px; border-left:3px solid var(--accent); padding-left:7px;}
+.chips{display:flex; flex-wrap:wrap; gap:5px;}
+.chip-tag{border:1px solid var(--line); background:#fff; border-radius:999px; padding:2px 9px; font-size:11.5px; cursor:pointer; transition:.12s; max-width:100%;}
+.chip-tag:hover{border-color:var(--accent); background:#eef2ff; color:var(--accent);}
+.chip-tag.en{font-weight:600; color:var(--text);}
+.chip-tag .zh{color:var(--sub); font-weight:400; font-size:10.5px;}
+.pw-result{white-space:pre-wrap; word-break:break-all; font-family:Consolas,Menlo,monospace; font-size:12px; background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:8px; min-height:50px; max-height:160px; overflow-y:auto;}
+.translate-box{background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:8px; font-size:11.5px; margin-top:8px; max-height:140px; overflow-y:auto;}
+.translate-box b{color:var(--accent);}
+
+/* 操作与结果 */
+.actions{display:flex; gap:8px; flex-wrap:wrap; margin:12px 0;}
+#wfJson{width:100%; height:110px; font-size:10.5px; background:#0f172a; color:#a5f3fc; border-radius:8px; border:none; padding:8px; font-family:Consolas,Menlo,monospace; white-space:pre; overflow:auto;}
+.result-img{width:100%; border-radius:10px; border:1px solid var(--line); margin-top:10px; box-shadow:0 4px 16px rgba(0,0,0,.08);}
+.status{font-size:12.5px; padding:8px 12px; border-radius:8px; margin-top:8px; display:none;}
+.status.run{display:block; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;}
+.status.ok{display:block; background:#f0fdf4; color:var(--ok); border:1px solid #bbf7d0;}
+.status.err{display:block; background:#fef2f2; color:#dc2626; border:1px solid #fecaca;}
+.meta-line{font-size:11.5px; color:var(--sub); margin-top:6px;}
+.hint{font-size:11px; color:var(--sub); margin-top:6px;}
+.kbd{background:#f1f5f9; border:1px solid var(--line); border-radius:5px; padding:0 5px; font-size:10.5px;}
+@media(max-width:1100px){ main{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛠 LoRA 工作流构建器</h1>
+  <span class="sub">选 LoRA + 底模 → 一键生图 · 提示词结构化选词/中英对照</span>
+  <span class="badge" id="comfyBadge">检测 ComfyUI…</span>
+</header>
+
+<main>
+  <!-- 左：底模 + 参数 -->
+  <div>
+    <div class="panel">
+      <h2><span class="n">1</span>选择底模</h2>
+      <div class="base-grid" id="baseGrid"></div>
+    </div>
+    <div class="panel" style="margin-top:14px">
+      <h2><span class="n">2</span>生成参数</h2>
+      <div class="param-row3">
+        <div><label>宽</label><input type="number" id="pw" value="768" min="256" step="64"></div>
+        <div><label>高</label><input type="number" id="ph" value="1024" min="256" step="64"></div>
+        <div><label>批次数</label><input type="number" id="pb" value="1" min="1" max="4"></div>
+      </div>
+      <div class="param-row3">
+        <div><label>步数</label><input type="number" id="psteps" value="9" min="1"></div>
+        <div><label>CFG</label><input type="number" id="pcfg" value="1" min="0.5" step="0.5"></div>
+        <div><label>种子</label><input type="number" id="pseed" value="-1"></div>
+      </div>
+      <div class="param-row">
+        <div><label>采样器</label><select id="psampler"><option>euler</option><option>euler_ancestral</option><option>dpm_2</option><option>heun</option><option>lms</option><option>dpm_fast</option></select></div>
+        <div><label>调度器</label><select id="psched"><option>simple</option><option>karras</option><option>sgm_uniform</option><option>normal</option><option>exponential</option></select></div>
+      </div>
+      <div class="hint">切换底模会自动套用推荐的步数 / CFG，可再手动改。</div>
+    </div>
+  </div>
+
+  <!-- 中：LoRA 选择 -->
+  <div class="panel">
+    <h2><span class="n">3</span>选择 LoRA（可多选）<span id="selCnt" style="margin-left:auto;font-size:11px;color:var(--accent)">0 个</span></h2>
+    <div class="lora-search"><input type="text" id="loraQ" placeholder="🔍 搜索 LoRA 名称…"></div>
+    <label style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:12px;color:var(--text);cursor:pointer">
+      <input type="checkbox" id="showAll" checked onchange="renderLoras()" style="accent-color:var(--accent)">
+      仅显示匹配当前底模的 LoRA
+    </label>
+    <div style="font-size:11px;color:var(--accent);margin-top:4px" id="loraCnt"></div>
+    <div class="lora-list" id="loraList"></div>
+    <div class="hint"><span class="kbd">☁</span> = 有训练标签词云（tags.json）</div>
+    <div id="selBox" class="selected-box" style="display:none"></div>
+  </div>
+
+  <!-- 右：提示词工具 + 操作 + 结果 -->
+  <div class="panel">
+    <h2><span class="n">4</span>提示词工具（结构化选词 · 中英对照）</h2>
+    <div class="pw-tabs">
+      <button id="tabPos" class="on" onclick="switchTab('pos')">正向提示词</button>
+      <button id="tabNeg" onclick="switchTab('neg')">负向提示词</button>
+    </div>
+    <textarea id="txtPos" placeholder="正向提示词（可手动输入，或用下方词库点击添加）">masterpiece, best quality, 1girl, solo, looking at viewer</textarea>
+    <textarea id="txtNeg" style="display:none" placeholder="负向提示词（Z-Image 等单流模型忽略）">lowres, bad anatomy, bad hands, extra fingers, watermark, text</textarea>
+    <div class="pw-search">
+      <input type="text" id="dictQ" placeholder="🔍 中/英文查词，如：girl / 光 / smile…">
+      <button class="btn sm" onclick="translatePrompt()">翻译当前提示词</button>
+    </div>
+    <div id="dictResult" class="translate-box" style="display:none"></div>
+    <div id="tagGroups"></div>
+
+    <div class="actions">
+      <button class="btn primary" onclick="generateAndRun()">⚡ 一键出图</button>
+      <button class="btn" onclick="generateJson()">生成工作流 JSON</button>
+      <button class="btn" onclick="copyJson()">复制 JSON</button>
+      <button class="btn" onclick="downloadJson()">下载 .json</button>
+    </div>
+    <div id="wfJsonWrap" style="display:none"><textarea id="wfJson" readonly></textarea></div>
+    <div class="status" id="status"></div>
+    <div id="result"></div>
+  </div>
+</main>
+
+<script>
+/* ================= 词库（结构化选词 + 中英对照） ================= */
+const DICT = {
+"主体":[["1girl","女孩"],["1boy","男孩"],["solo","单人"],["woman","女人"],["man","男人"],["multiple girls","多个女孩"],["couple","情侣/二人"],["group of people","一群人"]],
+"姿态":[["standing","站立"],["sitting","坐姿"],["lying","躺姿"],["kneeling","跪姿"],["walking","行走"],["running","奔跑"],["dancing","跳舞"],["squatting","蹲下"],["leaning","倚靠"],["turning around","转身"],["looking at viewer","看着镜头"]],
+"表情":[["smile","微笑"],["gentle smile","温柔微笑"],["laughing","大笑"],["serious","严肃"],["shy","害羞"],["surprised","惊讶"],["sad","悲伤"],["smirk","坏笑"],["tears","含泪"],["blush","脸红"],["pouting","嘟嘴"]],
+"外貌":[["long hair","长发"],["short hair","短发"],["black hair","黑发"],["silver hair","银发"],["blonde hair","金发"],["twin braids","双麻花辫"],["ponytail","马尾"],["bob cut","波波头"],["fringe","刘海"],["red eyes","红瞳"],["blue eyes","蓝瞳"],["glasses","眼镜"]],
+"服饰":[["dress","连衣裙"],["skirt","短裙"],["kimono","和服"],["qipao","旗袍"],["hanfu","汉服"],["school uniform","校服"],["suit","西装"],["casual clothes","休闲装"],["hoodie","卫衣"],["leather jacket","皮衣"],["swimsuit","泳装"],["armor","铠甲"],["high heels","高跟鞋"]],
+"场景":[["studio","影棚"],["city street","城市街道"],["bedroom","卧室"],["garden","花园"],["beach","海滩"],["forest","森林"],["snow","雪地"],["rainy day","雨天"],["night city","夜景城市"],["neon lights","霓虹灯"],["classroom","教室"],["rooftop","天台"],["traditional chinese architecture","中式古建"]],
+"光影":[["soft lighting","柔和光"],["golden hour","黄金时刻"],["backlight","逆光"],["rim light","轮廓光"],["cinematic lighting","电影感光"],["moonlight","月光"],["window light","窗光"],["studio lighting","影棚灯光"],["sunlight","日光"],["candlelight","烛光"],["volumetric light","体积光"]],
+"镜头":[["portrait","人像特写"],["close-up","近景"],["full body","全身"],["upper body","半身"],["medium shot","中景"],["low angle","仰拍"],["high angle","俯拍"],["over-the-shoulder","过肩镜头"],["bokeh","背景虚化"],["wide shot","远景"]],
+"画质":[["masterpiece","杰作"],["best quality","最佳质量"],["high quality","高质量"],["highres","高分辨率"],["detailed","细节丰富"],["sharp focus","锐利对焦"],["8k","8K"],["ultra detailed","超精细"],["film grain","胶片颗粒"],["depth of field","景深"]],
+"风格":[["photorealistic","照片写实"],["realistic","写实"],["anime style","动漫风"],["semi-realistic","半写实"],["2.5d","2.5D"],["illustration","插画风"],["watercolor","水彩"],["oil painting","油画"],["sketch","素描"],["cyberpunk","赛博朋克"],["steampunk","蒸汽朋克"],["gothic","哥特风"],["vintage","复古"],["futuristic","未来感"],["fantasy","奇幻"],["dreamy","梦幻"]],
+"负面":[
+  ["lowres","低分辨率"],["bad anatomy","糟糕结构"],["bad hands","坏手"],["extra fingers","多余手指"],["extra arms","多余手臂"],
+  ["watermark","水印"],["text","文字"],["signature","签名"],["logo","logo"],["blurry","模糊"],["jpeg artifacts","压缩噪点"],
+  ["ugly","丑陋"],["deformed","畸形"],["disfigured","毁容"],["poorly drawn","画得差"],["mutated","变异"]]
+};
+let BASE_MODELS = [];
+const FALLBACK_BASES = [
+  {id:"zimage", name:"Z-Image Turbo", desc:"单流 DiT · 9步 cfg1 · 中文原生", steps:9, cfg:1, sampler:"euler", sched:"simple", kind:"diffusion", shift:2.5, lora:"LoraLoader",
+   unet:"z_image_turbo_int8_convrot.safetensors", clip:"qwen_3_4b_fp8_mixed.safetensors", clipType:"lumina2", vae:"zImageTurbo_vae.safetensors", dirs:["Z-Image"]},
+  {id:"illustrious", name:"Illustrious XL", desc:"HassakuXL v13B · 25步 cfg3.5", steps:25, cfg:3.5, sampler:"euler", sched:"simple", kind:"checkpoint", lora:"LoraLoader",
+   ckpt:"HassakuXLIllustrious_v13B.safetensors", dirs:["Illustrious","SDXL","Pony"]},
+  {id:"krea2", name:"Krea2 Turbo", desc:"单流 DiT · 8步 cfg1 · LoRA仅模型", steps:8, cfg:1, sampler:"euler", sched:"simple", kind:"diffusion", lora:"LoraLoaderModelOnly",
+   unet:"krea2TurboRawINT8_krea2TurboINT8.safetensors", clip:"qwen3vl_4b_fp8_scaled.safetensors", clipType:"krea2", vae:"qwen_image_vae.safetensors", dirs:["Krea2"]}
+];
+async function loadBases(){
+  try{
+    const r = await fetch("/bases.json");
+    const o = await r.json();
+    BASE_MODELS = Object.entries(o).map(([id,b])=>({
+      id, name:b.name||id, desc:b.desc||"", steps:b.steps, cfg:b.cfg,
+      sampler:b.sampler||"euler", sched:b.scheduler||"simple",
+      kind:b.kind==="checkpoint"?"checkpoint":"diffusion",
+      shift:b.shift, lora:b.lora||"LoraLoader",
+      unet:(b.model||{}).unet, clip:(b.model||{}).clip, clipType:(b.model||{}).clip_type,
+      vae:(b.model||{}).vae, ckpt:(b.model||{}).ckpt,
+      dirs:b.dirs||[]
+    }));
+  }catch(e){ BASE_MODELS = FALLBACK_BASES.slice(); }
+  if(!BASE_MODELS.find(b=>b.id===curBase)) curBase = BASE_MODELS[0] ? BASE_MODELS[0].id : "zimage";
+  renderBases(); applyBaseParams(); renderLoras();
+}
+const POS_TAGS = Object.keys(DICT);
+const KEY = "lora_builder_state";
+
+/* ================= 状态 ================= */
+let ALL_LORAS = [];          // {name, dir, size, has_tags}
+let selected = {};           // name -> strength
+let curBase = "zimage";
+let curTab = "pos";
+
+/* ================= 工具 ================= */
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function loraFull(l){ return l.dir ? l.dir.replace(/\//g,"\\") + "\\" + l.name : l.name; }
+
+function saveState(){
+  try{ localStorage.setItem(KEY, JSON.stringify({base:curBase, sel:selected})); }catch(e){}
+}
+function loadState(){
+  try{ const s = JSON.parse(localStorage.getItem(KEY)||"{}"); if(s.base && BASE_MODELS.find(b=>b.id===s.base)) curBase=s.base; if(s.sel) selected=s.sel; }catch(e){}
+}
+
+/* ================= 底模 ================= */
+function renderBases(){
+  $("baseGrid").innerHTML = BASE_MODELS.map(b=>`
+    <div class="base-item ${b.id===curBase?'sel':''}" onclick="pickBase('${b.id}')">
+      <b>${b.name}</b><span>${b.desc}</span>
+    </div>`).join("");
+}
+function pickBase(id){
+  curBase = id;
+  const b = BASE_MODELS.find(x=>x.id===curBase);
+  const allowed = (b && b.dirs) || [];
+  if(!$("showAll").checked && allowed.length){
+    const removed = Object.keys(selected).filter(k=>{
+      const l = ALL_LORAS.find(x=>x.name===k);
+      return l && !allowed.includes(l.dir);
+    });
+    removed.forEach(k=>delete selected[k]);
+    if(removed.length) flash(`已移除 ${removed.length} 个不属于「${b.name}」的 LoRA`,"run");
+  }
+  renderBases(); applyBaseParams(); renderLoras(); renderSelected(); saveState();
+}
+function applyBaseParams(){
+  const b = BASE_MODELS.find(x=>x.id===curBase);
+  if(!b) return;
+  $("psteps").value = b.steps; $("pcfg").value = b.cfg; $("psampler").value = b.sampler; $("psched").value = b.sched;
+  const hint = $("txtNeg");
+  if(b.kind==="diffusion"){ hint.placeholder = "负向提示词（"+b.name+" 单流模型会忽略负向）"; }
+  else { hint.placeholder = "负向提示词（checkpoint 系有效）"; }
+}
+
+/* ================= LoRA 列表 ================= */
+function renderLoras(filter){
+  const q = (filter||$("loraQ").value||"").trim().toLowerCase();
+  const showAll = $("showAll").checked;
+  const b = BASE_MODELS.find(x=>x.id===curBase);
+  const allowed = (b && b.dirs) || [];
+  let list = ALL_LORAS.filter(l=>!q || l.name.toLowerCase().includes(q) || (l.dir||"").toLowerCase().includes(q));
+  if(!showAll && allowed.length) list = list.filter(l=>allowed.includes(l.dir));
+  const cnt = list.length;
+  $("loraCnt").textContent = showAll ? (cnt+" 个") : (cnt+" 个匹配 · "+allowed.join(" / "));
+  $("loraList").innerHTML = list.length ? list.map(l=>`
+    <div class="lora-item" onclick="toggleLora('${esc(l.name)}', event)">
+      <input type="checkbox" ${selected[l.name]?'checked':''} onclick="event.stopPropagation()">
+      <span class="nm" title="${esc(l.name)}">${esc(l.name)}</span>
+      ${l.has_tags?'<span class="tagflag" title="有训练标签词云">☁</span>':''}
+      ${l.dir?'<span class="dir">'+esc(l.dir)+'</span>':''}
+    </div>`).join("") : '<div style="padding:12px;color:var(--sub);font-size:12px">'+(showAll?'无匹配 LoRA':'该底模目录下没有 LoRA（勾选“显示全部”查看）')+'</div>';
+}
+function toggleLora(name, ev){
+  if(ev && ev.target && ev.target.type==="checkbox"){}
+  if(selected[name]) delete selected[name];
+  else selected[name] = 0.8;
+  renderLoras(); renderSelected(); saveState();
+}
+function renderSelected(){
+  const keys = Object.keys(selected);
+  $("selCnt").textContent = keys.length + " 个";
+  $("selBox").style.display = keys.length ? "block" : "none";
+  $("selBox").innerHTML = keys.map(k=>{
+    const l = ALL_LORAS.find(x=>x.name===k);
+    return `<div class="sel-item">
+      <span class="nm" title="${esc(k)}">${esc(k)}</span>
+      <span class="st">${(selected[k]||0).toFixed(2)}</span>
+      <input type="range" min="0" max="2" step="0.05" value="${selected[k]||0.8}"
+             oninput="setStrength('${esc(k)}', this.value)">
+      <button class="rm" onclick="toggleLora('${esc(k)}')">✕</button>
+    </div>`;
+  }).join("");
+}
+function setStrength(name, v){ selected[name] = parseFloat(v); renderSelected(); saveState(); }
+
+/* ================= 提示词工具 ================= */
+function switchTab(t){
+  curTab = t;
+  $("tabPos").classList.toggle("on", t==="pos");
+  $("tabNeg").classList.toggle("on", t==="neg");
+  $("txtPos").style.display = t==="pos" ? "block" : "none";
+  $("txtNeg").style.display = t==="neg" ? "block" : "none";
+}
+function renderTagGroups(q){
+  const query = (q||"").trim().toLowerCase();
+  const target = curTab;
+  $("tagGroups").innerHTML = POS_TAGS.map(g=>{
+    const words = DICT[g].filter(w=>!query || w[0].toLowerCase().includes(query) || w[1].includes(query));
+    if(!words.length) return "";
+    const chips = words.map(w=>`
+      <button class="chip-tag" onclick="addTag('${esc(w[0])}')">
+        <span class="en">${esc(w[0])}</span> <span class="zh">${esc(w[1])}</span>
+      </button>`).join("");
+    return `<div class="group"><h3>${g}</h3><div class="chips">${chips}</div></div>`;
+  }).join("");
+}
+function addTag(en){
+  const t = curTab==="pos" ? $("txtPos") : $("txtNeg");
+  const cur = t.value.trim();
+  t.value = cur ? cur + ", " + en : en;
+}
+function translatePrompt(){
+  const t = curTab==="pos" ? $("txtPos").value : $("txtNeg").value;
+  const flat = {};
+  Object.values(DICT).flat().forEach(([en,zh])=> flat[en.toLowerCase()] = zh);
+  const rows = t.split(",").map(s=>s.trim()).filter(Boolean).map(s=>{
+    const zh = flat[s.toLowerCase()];
+    return `<div><b>${esc(s)}</b>${zh?` → ${esc(zh)}`:' <span style="color:#94a3b8">(词库未收录)</span>'}</div>`;
+  });
+  const box = $("dictResult");
+  box.style.display = "block";
+  box.innerHTML = rows.length ? rows.join("") : "<div style='color:#94a3b8'>提示词为空</div>";
+}
+$("dictQ").addEventListener("input", e=>{ renderTagGroups(e.target.value); });
+
+/* ================= 工作流生成 ================= */
+function buildWorkflow(){
+  const b = BASE_MODELS.find(x=>x.id===curBase);
+  const loras = Object.keys(selected).map(k=>{
+    const l = ALL_LORAS.find(x=>x.name===k);
+    return {name:loraFull(l||{name:k}), strength:selected[k]};
+  });
+  const width = parseInt($("pw").value)||768, height = parseInt($("ph").value)||1024;
+  const steps = parseInt($("psteps").value)||b.steps, cfg = parseFloat($("pcfg").value)||b.cfg;
+  let seed = parseInt($("pseed").value);
+  if(isNaN(seed) || seed < 0) seed = Math.floor(Math.random()*1e15);
+  const sampler = $("psampler").value, sched = $("psched").value;
+  const pos = $("txtPos").value.trim(), neg = $("txtNeg").value.trim();
+  const batch = Math.max(1, Math.min(4, parseInt($("pb").value)||1));
+
+  let N = 0; const nx = ()=>String(++N); const P = {};
+  const add = (id, cls, inputs)=> P[id] = {class_type:cls, inputs};
+  let modelRef, clipRef, vaeRef;
+
+  if(b.kind==="checkpoint"){
+    const ic = nx(); add(ic, "CheckpointLoaderSimple", {ckpt_name:b.ckpt});
+    modelRef = [ic,0]; clipRef = [ic,1]; vaeRef = [ic,2];
+  } else { // diffusion（UNET + CLIP + VAE）
+    const iu = nx(); add(iu, "UNETLoader", {unet_name:b.unet, weight_dtype:"default"});
+    const ic = nx(); add(ic, "CLIPLoader", {clip_name:b.clip, type:b.clipType, device:"default"});
+    const iv = nx(); add(iv, "VAELoader", {vae_name:b.vae});
+    modelRef = [iu,0]; clipRef = [ic,0]; vaeRef = [iv,0];
+  }
+
+  // LoRA 链（LoraLoader 双链 / LoraLoaderModelOnly 仅模型）
+  let lastModel = modelRef, lastClip = clipRef;
+  loras.forEach((lo)=>{
+    if(b.lora === "LoraLoaderModelOnly"){
+      const il = nx(); add(il, "LoraLoaderModelOnly", {model:lastModel, lora_name:lo.name, strength_model:lo.strength});
+      lastModel = [il,0];
+    } else {
+      const il = nx(); add(il, "LoraLoader", {model:lastModel, clip:lastClip, lora_name:lo.name, strength_model:lo.strength, strength_clip:1.0});
+      lastModel = [il,0]; lastClip = [il,1];
+    }
+  });
+
+  let samplerModel = lastModel;
+  if(b.shift){ // 单流 DiT（如 Z-Image）需要 ModelSamplingAuraFlow shift
+    const im = nx(); add(im, "ModelSamplingAuraFlow", {model:lastModel, shift:b.shift});
+    samplerModel = [im,0];
+  }
+
+  const ip = nx(); add(ip, "CLIPTextEncode", {clip:lastClip, text:pos});
+  const in_ = nx(); add(in_, "CLIPTextEncode", {clip:lastClip, text:neg});
+  const ilat = nx(); add(ilat, "EmptyLatentImage", {width, height, batch_size:batch});
+  const ik = nx(); add(ik, "KSampler", {model:samplerModel, positive:[ip,0], negative:[in_,0],
+      latent_image:[ilat,0], seed, steps, cfg, sampler_name:sampler, scheduler:sched, denoise:1.0});
+  const idc = nx(); add(idc, "VAEDecode", {samples:[ik,0], vae:vaeRef});
+  const isv = nx(); add(isv, "SaveImage", {images:[idc,0], filename_prefix:"lora_builder"});
+  return {prompt:P, meta:{base:b.id, loras:loras.map(l=>l.name), steps, cfg, sampler, sched, seed, width, height}};
+}
+
+function generateJson(){
+  const wf = buildWorkflow();
+  $("wfJsonWrap").style.display = "block";
+  $("wfJson").value = JSON.stringify(wf.prompt, null, 1);
+  return wf;
+}
+function copyJson(){
+  const wf = generateJson();
+  navigator.clipboard.writeText(JSON.stringify(wf.prompt)).then(()=>flash("✅ JSON 已复制", "ok"));
+}
+function downloadJson(){
+  const wf = generateJson();
+  const blob = new Blob([JSON.stringify(wf.prompt, null, 1)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "lora_workflow.json"; a.click();
+}
+function flash(msg, cls){ const s=$("status"); s.className="status "+cls; s.innerHTML=msg; }
+
+/* ================= 一键出图 ================= */
+async function generateAndRun(){
+  const wf = generateJson();
+  const st = $("status");
+  st.className = "status run"; st.innerHTML = "提交到 ComfyUI…";
+  $("result").innerHTML = "";
+  try{
+    const r = await fetch("/comfy/prompt", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({prompt: wf.prompt, client_id: "builder-"+Math.random().toString(36).slice(2)})});
+    const j = await r.json();
+    if(!j.prompt_id) throw new Error(j.error || "提交失败 HTTP "+r.status);
+    st.innerHTML = "已提交，生成中…（底模加载较慢属正常）";
+    const imgs = await pollHistory(j.prompt_id);
+    if(!imgs || !imgs.length) throw new Error("没有输出图片");
+    const img = imgs[0];
+    const url = "/comfy/view?filename="+encodeURIComponent(img.filename)+
+      (img.subfolder?"&subfolder="+encodeURIComponent(img.subfolder):"")+"&type="+encodeURIComponent(img.type||"output");
+    $("result").innerHTML =
+      `<img class="result-img" src="${url}" alt="生成结果">`+
+      `<div class="meta-line">seed: <b>${wf.meta.seed}</b> · ${wf.meta.steps}步 cfg${wf.meta.cfg} · ${wf.meta.width}×${wf.meta.height} · ${img.filename}</div>`;
+    st.className = "status ok"; st.innerHTML = "✅ 生成完成";
+  }catch(e){
+    st.className = "status err"; st.innerHTML = "❌ "+e.message+"（确认 ComfyUI 已启动：python serve_builder.py 启动时会有提示）";
+  }
+}
+async function pollHistory(id, tries=0){
+  await new Promise(r=>setTimeout(r, 2000));
+  const r = await fetch("/comfy/history/"+id);
+  const j = await r.json();
+  const rec = j[id];
+  if(rec && rec.outputs){
+    const imgs = Object.values(rec.outputs).flatMap(o=>o.images||[]);
+    if(imgs.length) return imgs;
+  }
+  if(rec && rec.status && rec.status.status_str==="error"){
+    const msgs = rec.status.messages||[];
+    const err = JSON.stringify(msgs).slice(0,400);
+    throw new Error("ComfyUI 报错："+err);
+  }
+  if(tries > 180) throw new Error("生成超时（约6分钟）");
+  return pollHistory(id, tries+1);
+}
+
+/* ================= 初始化 ================= */
+(async function init(){
+  loadState();
+  await loadBases();
+  renderTagGroups("");
+  try{
+    const r = await fetch("/loras.json"); ALL_LORAS = await r.json();
+    renderLoras(); renderSelected();
+  }catch(e){ $("loraList").innerHTML = '<div style="padding:12px;color:#dc2626;font-size:12px">无法加载 loras.json</div>'; }
+  try{
+    const h = await fetch("/health"); const j = await h.json();
+    const b = $("comfyBadge");
+    b.textContent = j.comfy ? "ComfyUI 在线" : "ComfyUI 离线";
+    b.className = "badge " + (j.comfy ? "ok" : "bad");
+  }catch(e){ const b=$("comfyBadge"); b.textContent="服务异常"; b.className="badge bad"; }
+  $("loraQ").addEventListener("input", e=>renderLoras(e.target.value));
+})();
+</script>
+</body>
+</html>

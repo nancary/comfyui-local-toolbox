@@ -1,0 +1,35 @@
+# Generated gallery (contains personal LoRA data — do NOT commit)
+lora_gallery/
+lora_cache.json
+*.cache
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Local env overrides
+.env
+
+# ComfyBatchTool — uploaded workflows (temp) + batch outputs (personal)
+workflows/
+batch_output/
+*.log
+
+
+# Generated outputs (contain personal LoRA library data)
+unmatched.json
+tags.json
+builder_e2e.png
+lora_previews.html
+previews/

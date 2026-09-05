@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lora-civitai-gallery"
+version = "0.1.0"
+description = "Scan local ComfyUI LoRA files, reverse-lookup Civitai by SHA256, and generate a visual HTML gallery."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+keywords = ["lora", "civitai", "comfyui", "stable-diffusion", "gallery"]
+authors = [{ name = "LoRA Civitai Gallery contributors" }]
+dependencies = []
+
+[project.scripts]
+lora-gallery = "lora_civitai_gallery:main"
+comfy-batch = "comfy_batch_runner:main"
+comfy-batch-web = "comfy_batch_tool:main"
+
+[project.urls]
+Homepage = "https://github.com/your-username/lora-civitai-gallery"

@@ -1,0 +1,138 @@
+{
+  "zimage": {
+    "name": "Z-Image Turbo",
+    "desc": "单流 DiT · 9步 cfg1 · 中文原生",
+    "kind": "diffusion",
+    "steps": 9,
+    "cfg": 1.0,
+    "sampler": "euler",
+    "scheduler": "simple",
+    "shift": 2.5,
+    "lora": "LoraLoader",
+    "model": {
+      "unet": "z_image_turbo_int8_convrot.safetensors",
+      "clip": "qwen_3_4b_fp8_mixed.safetensors",
+      "clip_type": "lumina2",
+      "vae": "zImageTurbo_vae.safetensors"
+    },
+    "dirs": [
+      "Z-Image"
+    ],
+    "note": "示例：Z-Image Turbo（单流 DiT，需 ModelSamplingAuraFlow shift 2.5）"
+  },
+  "krea2": {
+    "name": "Krea2 Turbo",
+    "desc": "单流 DiT · 8步 cfg1 · LoRA 仅模型",
+    "kind": "diffusion",
+    "steps": 8,
+    "cfg": 1.0,
+    "sampler": "euler",
+    "scheduler": "simple",
+    "lora": "LoraLoaderModelOnly",
+    "model": {
+      "unet": "krea2TurboRawINT8_krea2TurboINT8.safetensors",
+      "clip": "qwen3vl_4b_fp8_scaled.safetensors",
+      "clip_type": "krea2",
+      "vae": "qwen_image_vae.safetensors"
+    },
+    "dirs": [
+      "Krea2"
+    ],
+    "note": "示例：Krea2 Turbo（LoRA 挂 LoraLoaderModelOnly）"
+  },
+  "illustrious": {
+    "name": "Illustrious XL",
+    "desc": "通用 XL checkpoint · 25步 cfg3.5",
+    "kind": "checkpoint",
+    "steps": 25,
+    "cfg": 3.5,
+    "sampler": "euler",
+    "scheduler": "simple",
+    "lora": "LoraLoader",
+    "model": {
+      "ckpt": "HassakuXLIllustrious_v13B.safetensors"
+    },
+    "dirs": [
+      "Illustrious",
+      "SDXL",
+      "Pony"
+    ],
+    "note": "示例：Illustrious 系（HassakuXL v13B），也可改任一 XL checkpoint"
+  },
+  "sdxl": {
+    "name": "SDXL Base",
+    "desc": "通用 SDXL · 30步 cfg7 · 开源通用",
+    "kind": "checkpoint",
+    "steps": 30,
+    "cfg": 7.0,
+    "sampler": "euler",
+    "scheduler": "normal",
+    "lora": "LoraLoader",
+    "model": {
+      "ckpt": "sd_xl_base_1.0.safetensors"
+    },
+    "dirs": [
+      "SDXL"
+    ],
+    "note": "开源通用示例：请把 ckpt 改成你本地的 SDXL 文件名"
+  },
+  "pony": {
+    "name": "Pony Diffusion XL",
+    "desc": "通用 Pony XL · 30步 cfg7",
+    "kind": "checkpoint",
+    "steps": 30,
+    "cfg": 7.0,
+    "sampler": "euler",
+    "scheduler": "normal",
+    "lora": "LoraLoader",
+    "model": {
+      "ckpt": "ponyDiffusionV6XL_v6StartWithThisOne.safetensors"
+    },
+    "dirs": [
+      "Pony",
+      "SDXL"
+    ],
+    "note": "开源通用示例：请改成你本地的 Pony 文件名"
+  },
+  "flux1": {
+    "name": "FLUX.1 dev",
+    "desc": "FLUX 系 · 20步 cfg1（需 t5+clip_l/ae）",
+    "kind": "diffusion",
+    "steps": 20,
+    "cfg": 1.0,
+    "sampler": "euler",
+    "scheduler": "simple",
+    "lora": "LoraLoader",
+    "model": {
+      "unet": "flux1-dev.safetensors",
+      "clip": "t5xxl_fp8_e4m3fn_scaled.safetensors",
+      "clip_type": "flux",
+      "vae": "ae.safetensors"
+    },
+    "dirs": [
+      "Flux",
+      "FLUX"
+    ],
+    "note": "开源通用示例：FLUX 的 CLIP 组合视 ComfyUI 版本而定，请按环境调整文件名"
+  },
+  "anima": {
+    "name": "Anima",
+    "desc": "Anima 系 DiT · 20步 cfg4 · qwen3-0.6B 文本编码",
+    "kind": "diffusion",
+    "steps": 20,
+    "cfg": 4.0,
+    "sampler": "euler_ancestral",
+    "scheduler": "simple",
+    "lora": "LoraLoader",
+    "model": {
+      "unet": "divingAnima_v50.safetensors",
+      "clip": "qwen_3_06b_base.safetensors",
+      "clip_type": "stable_diffusion",
+      "vae": "qwen_image_vae.safetensors"
+    },
+    "dirs": [
+      "Anima"
+    ],
+    "note": "Anima 系（默认 divingAnima v5.0；可在 model.unet 换 duchesseAnima_v10 / PVCStyleModelMovable_anima10）"
+  }
+}
