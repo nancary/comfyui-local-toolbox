@@ -33,3 +33,7 @@ tags.json
 builder_e2e.png
 lora_previews.html
 previews/
+
+# Generated index (never commit: contains local paths & file lists)
+loras.json
+annotations.json

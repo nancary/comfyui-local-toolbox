@@ -25,7 +25,8 @@ ComfyUI workflows in the browser and rendering them with one click.
 |------|--------------|
 | `gallery.html` | Sortable, searchable cards for every LoRA — Civitai thumbnails, descriptions, trigger words, auto-inferred category, **training-tag word cloud** (for the 88% of LoRAs whose safetensors header carries `ss_tag_frequency`). |
 | `workflow_builder.html` | Pick one or more LoRAs → choose a base model → fill in a prompt via the structured **CN/EN thesaurus** → hit **⚡ Generate** and watch the result come back in the browser. |
-| `serve_builder.py` | Tiny local server that hosts the builder page, generates `loras.json`, and proxies `/prompt` + `/history` + `/view` to your ComfyUI (sidesteps the browser CORS wall). |
+| `serve_builder.py` | **Unified local server** — hosts both `gallery.html` and `workflow_builder.html`, generates `loras.json`, proxies `/prompt` + `/history` + `/view` to your ComfyUI (sidesteps the browser CORS wall), and serves the gallery's annotation / cart-export / preview-generation APIs. |
+| `start.py` | One-command launcher: starts the unified server and opens your browser at the gallery. Auto-detects the LoRA dir, picks a free port, and is safe to double-run. |
 
 ---
 
@@ -77,10 +78,10 @@ pip install -e .
 
 ```bash
 # 1) Build the gallery (Civitai hash lookup + thumbnails + cache)
-python lora_civitai_gallery.py --loras-dir "D:/ComfyUI/models/loras"
+python lora_civitai_gallery.py --loras-dir "/path/to/ComfyUI/models/loras"
 
 # 2) Read training tags from safetensors headers → drives the word cloud
-python scan_ss_tags.py --loras-dir "D:/ComfyUI/models/loras"
+python scan_ss_tags.py --loras-dir "/path/to/ComfyUI/models/loras"
 
 # 3) Re-build gallery.html: promote the matched/unmatched cards,
 #    inject the word cloud, fix stale panel counts.
@@ -88,14 +89,14 @@ python restructure_gallery.py
 
 # 3b) Inject the 🛒 shopping-cart UI + "导出工作流文件" button
 python inject_cart.py
-# open lora_gallery/gallery.html  — done with the gallery (cart → workflow file)
 
 # 4) (Optional) Generate reference images for unmatched / local LoRAs
 python generate_lora_previews.py
 
-# 5) Start the workflow builder (make sure ComfyUI is running on :8000)
-python serve_builder.py --port 8090
-# open http://127.0.0.1:8090/  — pick LoRAs, type a prompt, click ⚡
+# 5) One command to serve everything (gallery + builder + APIs)
+python start.py
+# → opens http://127.0.0.1:8090/gallery.html automatically
+#   (or: python serve_builder.py --port 8090, then open /gallery.html)
 ```
 
 ### ASCII flow
