@@ -1,0 +1,387 @@
+{
+  "version": 1,
+  "_comment": "灵感积木词库：分层标签块 + 底模提示词档案 + 成熟风格配方。blocks.items.t 为拼进提示词的文本；zh 为中文说明；hot=true 表示显性高效词（实测/社区公认出效果）；bases 为仅适用的底模（缺省=通用）。",
+  "bases": {
+    "zimage": {
+      "name": "Z-Image Turbo",
+      "syntax": "natural",
+      "supports_cn": true,
+      "weight_syntax": "none",
+      "tips": [
+        "中文/英文混用都行，自然语言短句最稳",
+        "不需要质量词堆砌——精简四要素：主体 + 动作 + 光影 + 场景",
+        "cfg=1 时负面提示词无效，negative 不用写",
+        "8-9 步秒级出图，写实摄影质感是它的强项"
+      ],
+      "default_neg": "",
+      "params": { "steps": 9, "cfg": 1.0, "sampler": "euler", "scheduler": "simple" }
+    },
+    "krea2": {
+      "name": "Krea2",
+      "syntax": "natural",
+      "supports_cn": true,
+      "weight_syntax": "none",
+      "tips": [
+        "自然语言整句描述效果最好，像跟摄影师下单一样写",
+        "不堆质量词；描述越具体（镜头/光线/情绪）越稳",
+        "FP8 精度 Turbo 模式 12 步"
+      ],
+      "default_neg": "",
+      "params": { "steps": 12, "cfg": 1.0, "sampler": "euler", "scheduler": "simple" }
+    },
+    "flux1": {
+      "name": "FLUX",
+      "syntax": "natural",
+      "supports_cn": false,
+      "weight_syntax": "none",
+      "tips": [
+        "用完整的英文句子描述画面，而不是堆标签",
+        "不要质量词、不要负面词——它靠文本对齐吃饭",
+        "文字渲染能力强，可以让画面里出现牌子/招牌文字"
+      ],
+      "default_neg": "",
+      "params": { "steps": 20, "cfg": 3.5, "sampler": "euler", "scheduler": "simple" }
+    },
+    "anima": {
+      "name": "Anima",
+      "syntax": "hybrid",
+      "supports_cn": true,
+      "weight_syntax": "paren",
+      "tips": [
+        "qwen3 文本编码器：中文自然语言和 Danbooru 标签都吃",
+        "动画/插画渲染向，写实词会拉低出片率",
+        "约 20 步 / cfg 4，负面词有效"
+      ],
+      "default_neg": "lowres, bad anatomy, bad hands, watermark",
+      "params": { "steps": 20, "cfg": 4.0, "sampler": "euler_ancestral", "scheduler": "simple" }
+    },
+    "illustrious": {
+      "name": "Illustrious",
+      "syntax": "danbooru",
+      "supports_cn": false,
+      "weight_syntax": "paren",
+      "tips": [
+        "Danbooru 标签体系：逗号分隔的英文标签，越精确越好",
+        "质量词开头（masterpiece, best quality）有明显影响",
+        "支持 (tag:1.2) 分数权重，给关键标签加权",
+        "负面词有效：把不想要的元素写进 negative"
+      ],
+      "default_neg": "lowres, bad anatomy, bad hands, extra fingers, watermark, text",
+      "params": { "steps": 28, "cfg": 5.0, "sampler": "euler", "scheduler": "simple" }
+    },
+    "sdxl": {
+      "name": "SDXL",
+      "syntax": "danbooru",
+      "supports_cn": false,
+      "weight_syntax": "paren",
+      "tips": [
+        "标签+自然语言混合都行，Danbooru 标签最稳",
+        "质量词对出图影响明显",
+        "支持 (tag:1.2) 分数权重"
+      ],
+      "default_neg": "lowres, bad anatomy, bad hands, watermark, text",
+      "params": { "steps": 28, "cfg": 5.5, "sampler": "dpmpp_2m", "scheduler": "karras" }
+    },
+    "pony": {
+      "name": "Pony",
+      "syntax": "danbooru",
+      "supports_cn": false,
+      "weight_syntax": "paren",
+      "tips": [
+        "必须带 score_9, score_8_up, score_7_up 开头才正常发挥",
+        "Danbooru 标签；负面词有效（score_6 系放 negative）",
+        "y2k/欧美向语料多，中式题材靠标签硬写"
+      ],
+      "default_neg": "score_6, score_5, score_4, lowres, bad anatomy, watermark",
+      "params": { "steps": 26, "cfg": 6.0, "sampler": "euler", "scheduler": "simple" }
+    }
+  },
+  "blocks": [
+    {
+      "cat": "主体人物",
+      "items": [
+        { "t": "1girl, solo", "zh": "单人少女（最通用开场）", "hot": true },
+        { "t": "1boy, solo", "zh": "单人少年" },
+        { "t": "mature female", "zh": "成熟女性" },
+        { "t": "2girls", "zh": "双人少女" },
+        { "t": "portrait of a young woman", "zh": "年轻女性肖像（自然语言底模用）" },
+        { "t": "long hair, flowing hair", "zh": "长发/飞发" },
+        { "t": "short hair, pixie cut", "zh": "短发/精灵短剪" },
+        { "t": "black hair", "zh": "黑发" },
+        { "t": "brown eyes", "zh": "棕瞳" },
+        { "t": "delicate face, detailed skin texture", "zh": "精致脸+皮肤质感", "hot": true },
+        { "t": "slender figure", "zh": "纤细身形" }
+      ]
+    },
+    {
+      "cat": "表情动作",
+      "items": [
+        { "t": "looking at viewer", "zh": "看向镜头（代入感强）", "hot": true },
+        { "t": "gentle smile", "zh": "浅笑" },
+        { "t": "closed eyes, serene expression", "zh": "闭眼·宁静" },
+        { "t": "head tilt", "zh": "歪头" },
+        { "t": "looking back", "zh": "回眸", "hot": true },
+        { "t": "hand on own cheek", "zh": "手托脸颊" },
+        { "t": "arms behind back", "zh": "背手而立" },
+        { "t": "walking towards viewer", "zh": "向镜头走来" },
+        { "t": "sitting on windowsill", "zh": "坐在窗台" },
+        { "t": "hair blown by wind", "zh": "发丝被风吹起", "hot": true },
+        { "t": "mid-dance pose", "zh": "舞蹈瞬间" },
+        { "t": "stretching lazily", "zh": "慵懒伸懒腰" }
+      ]
+    },
+    {
+      "cat": "服装造型",
+      "items": [
+        { "t": "white hanfu, flowing sleeves", "zh": "白色汉服·广袖", "hot": true },
+        { "t": "cheongsam, embroidery", "zh": "旗袍·刺绣" },
+        { "t": "oversized hoodie", "zh": "加大连帽衫" },
+        { "t": "leather jacket", "zh": "皮夹克" },
+        { "t": "off-shoulder sweater", "zh": "一字肩毛衣" },
+        { "t": "school uniform", "zh": "校服" },
+        { "t": "silk dress", "zh": "丝质连衣裙" },
+        { "t": "ribbon, hair ornament", "zh": "发饰·丝带" },
+        { "t": "veil, translucent", "zh": "半透薄纱" },
+        { "t": "silver jewelry", "zh": "银饰" },
+        { "t": "casual outfit, streetwear", "zh": "日常街头穿搭" }
+      ]
+    },
+    {
+      "cat": "场景环境",
+      "items": [
+        { "t": "moonlit rooftop", "zh": "月光天台", "hot": true },
+        { "t": "ancient palace, carved pillars", "zh": "古宫殿·雕柱" },
+        { "t": "bamboo forest", "zh": "竹林" },
+        { "t": "city street at night, rain", "zh": "夜雨街头" },
+        { "t": "classroom, afternoon", "zh": "午后教室" },
+        { "t": "cafe interior, warm light", "zh": "咖啡店·暖光" },
+        { "t": "cherry blossom petals falling", "zh": "樱花飘落" },
+        { "t": "snow field, quiet", "zh": "雪原·安静" },
+        { "t": "seaside cliff at dusk", "zh": "黄昏海边悬崖" },
+        { "t": "temple interior, incense smoke", "zh": "寺庙内·香烟" },
+        { "t": "wildflower meadow", "zh": "野花草甸" },
+        { "t": "old town alley", "zh": "老城小巷" }
+      ]
+    },
+    {
+      "cat": "光影氛围",
+      "items": [
+        { "t": "rembrandt lighting", "zh": "伦勃朗光（情绪人像之王）", "hot": true },
+        { "t": "backlight, rim light", "zh": "逆光·轮廓光", "hot": true },
+        { "t": "golden hour", "zh": "黄金时刻", "hot": true },
+        { "t": "moonlight, cool tones", "zh": "月光·冷调" },
+        { "t": "dappled sunlight", "zh": "树影斑驳", "hot": true },
+        { "t": "volumetric light, god rays", "zh": "体积光·丁达尔" },
+        { "t": "soft window light", "zh": "柔和窗光" },
+        { "t": "candlelight, warm glow", "zh": "烛光·暖晕" },
+        { "t": "neon glow, night", "zh": "霓虹夜色" },
+        { "t": "chiaroscuro, strong contrast", "zh": "明暗强对比" },
+        { "t": "silhouette", "zh": "剪影" },
+        { "t": "lens flare", "zh": "镜头光晕" }
+      ]
+    },
+    {
+      "cat": "镜头构图",
+      "items": [
+        { "t": "close-up", "zh": "特写", "hot": true },
+        { "t": "upper body portrait", "zh": "半身像" },
+        { "t": "full body", "zh": "全身" },
+        { "t": "from below", "zh": "仰拍" },
+        { "t": "from above", "zh": "俯拍" },
+        { "t": "dutch angle", "zh": "斜角镜头（张力）" },
+        { "t": "shallow depth of field, bokeh", "zh": "浅景深·虚化", "hot": true },
+        { "t": "85mm lens", "zh": "85mm 人像镜头" },
+        { "t": "negative space", "zh": "留白构图", "hot": true },
+        { "t": "over-the-shoulder shot", "zh": "过肩镜头" },
+        { "t": "mirror reflection", "zh": "镜面反射" }
+      ]
+    },
+    {
+      "cat": "风格质感",
+      "items": [
+        { "t": "film grain", "zh": "胶片颗粒", "hot": true },
+        { "t": "kodak portra 400", "zh": "柯达 Portra 400 胶片色", "hot": true },
+        { "t": "cinematic still", "zh": "电影剧照感", "hot": true },
+        { "t": "dreamy glow, soft focus", "zh": "梦幻光晕·柔焦" },
+        { "t": "heavy bloom, diffusion", "zh": "重光晕·弥散" },
+        { "t": "muted color palette", "zh": "低饱和色调" },
+        { "t": "vibrant colors", "zh": "高饱和鲜艳" },
+        { "t": "semi-realistic", "zh": "半写实" },
+        { "t": "anime style, cel shading", "zh": "动漫·赛璐璐" },
+        { "t": "oil painting texture", "zh": "油画肌理" },
+        { "t": "watercolor", "zh": "水彩" },
+        { "t": "ethereal, otherworldly", "zh": "空灵出尘", "hot": true }
+      ]
+    },
+    {
+      "cat": "质量词",
+      "items": [
+        { "t": "masterpiece, best quality, absurdres", "zh": "SDXL/Illustrious 系标准质量词", "bases": ["illustrious", "sdxl", "anima"], "hot": true },
+        { "t": "very aesthetic, masterpiece", "zh": "Illustrious 审美加成词", "bases": ["illustrious"], "hot": true },
+        { "t": "highres, ultra detailed", "zh": "高清细节通用质量词", "bases": ["illustrious", "sdxl", "pony", "anima"] },
+        { "t": "score_9, score_8_up, score_7_up", "zh": "Pony 必带评分词", "bases": ["pony"], "hot": true },
+        { "t": "source_anime", "zh": "Pony 动漫源标记", "bases": ["pony"] }
+      ]
+    }
+  ],
+  "recipes": [
+    {
+      "name": "古风 · 月下飞天",
+      "base": "zimage",
+      "emoji": "🌙",
+      "desc": "你库里最大的题材：月华逆光+广袖飘带+空灵出尘。Z-Image 直出。",
+      "pos": "1girl, solo, white hanfu with flowing sleeves, hair blown by wind, moonlit rooftop, moonlight, backlight, rim light, ethereal, otherworldly, silk ribbon dancing in air, delicate face, detailed skin texture, film grain, shallow depth of field",
+      "neg": "",
+      "blocks": [
+        { "cat": "主体人物", "t": "1girl, solo" },
+        { "cat": "服装造型", "t": "white hanfu, flowing sleeves" },
+        { "cat": "服装造型", "t": "veil, translucent" },
+        { "cat": "表情动作", "t": "hair blown by wind" },
+        { "cat": "场景环境", "t": "moonlit rooftop" },
+        { "cat": "光影氛围", "t": "moonlight, cool tones" },
+        { "cat": "光影氛围", "t": "backlight, rim light" },
+        { "cat": "风格质感", "t": "ethereal, otherworldly" },
+        { "cat": "风格质感", "t": "film grain" },
+        { "cat": "镜头构图", "t": "shallow depth of field, bokeh" }
+      ]
+    },
+    {
+      "name": "情绪光影人像",
+      "base": "zimage",
+      "emoji": "🪔",
+      "desc": "伦勃朗光+胶片颗粒+皮肤质感——情绪人像的黄金三角。",
+      "pos": "portrait of a young woman, looking at viewer, rembrandt lighting, chiaroscuro, dark background, close-up, 85mm lens, shallow depth of field, detailed skin texture, film grain, kodak portra 400, muted color palette",
+      "neg": "",
+      "blocks": [
+        { "cat": "主体人物", "t": "portrait of a young woman" },
+        { "cat": "主体人物", "t": "delicate face, detailed skin texture" },
+        { "cat": "表情动作", "t": "looking at viewer" },
+        { "cat": "光影氛围", "t": "rembrandt lighting" },
+        { "cat": "光影氛围", "t": "chiaroscuro, strong contrast" },
+        { "cat": "镜头构图", "t": "close-up" },
+        { "cat": "镜头构图", "t": "85mm lens" },
+        { "cat": "镜头构图", "t": "shallow depth of field, bokeh" },
+        { "cat": "风格质感", "t": "film grain" },
+        { "cat": "风格质感", "t": "kodak portra 400" },
+        { "cat": "风格质感", "t": "muted color palette" }
+      ]
+    },
+    {
+      "name": "文艺电影 · 黄金时刻",
+      "base": "zimage",
+      "emoji": "🎬",
+      "desc": "电影剧照感：黄金时刻+树影斑驳+低饱和，故事感拉满。",
+      "pos": "1girl, solo, casual outfit, walking, wildflower meadow, golden hour, dappled sunlight, lens flare, cinematic still, kodak portra 400, film grain, muted color palette, from below, hair blown by wind",
+      "neg": "",
+      "blocks": [
+        { "cat": "主体人物", "t": "1girl, solo" },
+        { "cat": "服装造型", "t": "casual outfit, streetwear" },
+        { "cat": "表情动作", "t": "walking towards viewer" },
+        { "cat": "场景环境", "t": "wildflower meadow" },
+        { "cat": "光影氛围", "t": "golden hour" },
+        { "cat": "光影氛围", "t": "dappled sunlight" },
+        { "cat": "镜头构图", "t": "from below" },
+        { "cat": "风格质感", "t": "cinematic still" },
+        { "cat": "风格质感", "t": "kodak portra 400" },
+        { "cat": "风格质感", "t": "film grain" }
+      ]
+    },
+    {
+      "name": "梦幻写真 · 柔焦光晕",
+      "base": "zimage",
+      "emoji": "☁️",
+      "desc": "重光晕+柔焦+粉调，梦感写真。适合窗边/逆光场景。",
+      "pos": "1girl, solo, silk dress, sitting on windowsill, soft window light, dreamy glow, soft focus, heavy bloom, diffusion, pastel tones, shallow depth of field, closed eyes, serene expression, delicate face",
+      "neg": "",
+      "blocks": [
+        { "cat": "主体人物", "t": "1girl, solo" },
+        { "cat": "服装造型", "t": "silk dress" },
+        { "cat": "表情动作", "t": "closed eyes, serene expression" },
+        { "cat": "场景环境", "t": "cafe interior, warm light" },
+        { "cat": "光影氛围", "t": "soft window light" },
+        { "cat": "镜头构图", "t": "shallow depth of field, bokeh" },
+        { "cat": "风格质感", "t": "dreamy glow, soft focus" },
+        { "cat": "风格质感", "t": "heavy bloom, diffusion" }
+      ]
+    },
+    {
+      "name": "短发中性 · 少年感",
+      "base": "zimage",
+      "emoji": "🧢",
+      "desc": "假小子方向：明亮生动、活人感。短发+街头+黄昏天台。",
+      "pos": "1boy-like tomboy girl, solo, short hair, pixie cut, oversized hoodie, casual outfit, city street at night, neon glow, looking at viewer, head tilt, gentle smile, cinematic still, film grain, shallow depth of field, vibrant colors",
+      "neg": "",
+      "blocks": [
+        { "cat": "主体人物", "t": "short hair, pixie cut" },
+        { "cat": "服装造型", "t": "oversized hoodie" },
+        { "cat": "服装造型", "t": "leather jacket" },
+        { "cat": "表情动作", "t": "looking at viewer" },
+        { "cat": "表情动作", "t": "head tilt" },
+        { "cat": "场景环境", "t": "city street at night, rain" },
+        { "cat": "光影氛围", "t": "neon glow, night" },
+        { "cat": "风格质感", "t": "cinematic still" },
+        { "cat": "风格质感", "t": "film grain" },
+        { "cat": "风格质感", "t": "vibrant colors" }
+      ]
+    },
+    {
+      "name": "新中式 · 暗色哥特",
+      "base": "illustrious",
+      "emoji": "🏯",
+      "desc": "银丝刺绣+黑纱+烛光，暗色新中式。Danbooru 标签体系+质量词。",
+      "pos": "masterpiece, best quality, absurdres, 1girl, solo, cheongsam, embroidery, silver jewelry, veil, translucent, temple interior, incense smoke, candlelight, warm glow, chiaroscuro, looking at viewer, closed mouth, dark palette, film grain",
+      "neg": "lowres, bad anatomy, bad hands, extra fingers, watermark, text",
+      "blocks": [
+        { "cat": "质量词", "t": "masterpiece, best quality, absurdres" },
+        { "cat": "主体人物", "t": "1girl, solo" },
+        { "cat": "服装造型", "t": "cheongsam, embroidery" },
+        { "cat": "服装造型", "t": "silver jewelry" },
+        { "cat": "服装造型", "t": "veil, translucent" },
+        { "cat": "场景环境", "t": "temple interior, incense smoke" },
+        { "cat": "光影氛围", "t": "candlelight, warm glow" },
+        { "cat": "光影氛围", "t": "chiaroscuro, strong contrast" },
+        { "cat": "表情动作", "t": "looking at viewer" },
+        { "cat": "风格质感", "t": "film grain" }
+      ]
+    },
+    {
+      "name": "午后教室 · 胶片随拍",
+      "base": "illustrious",
+      "emoji": "📷",
+      "desc": "日常感抓拍：教室+窗光+胶片色。Danbooru 体系验证过的成熟配方。",
+      "pos": "masterpiece, best quality, absurdres, 1girl, solo, school uniform, short hair, sitting on windowsill, looking out window, classroom, afternoon, soft window light, dappled sunlight, film grain, depth of field, candid",
+      "neg": "lowres, bad anatomy, bad hands, extra fingers, watermark, text",
+      "blocks": [
+        { "cat": "质量词", "t": "masterpiece, best quality, absurdres" },
+        { "cat": "主体人物", "t": "1girl, solo" },
+        { "cat": "服装造型", "t": "school uniform" },
+        { "cat": "表情动作", "t": "head tilt" },
+        { "cat": "场景环境", "t": "classroom, afternoon" },
+        { "cat": "光影氛围", "t": "soft window light" },
+        { "cat": "光影氛围", "t": "dappled sunlight" },
+        { "cat": "镜头构图", "t": "shallow depth of field, bokeh" },
+        { "cat": "风格质感", "t": "film grain" }
+      ]
+    },
+    {
+      "name": "Anima · 空灵舞袖",
+      "base": "anima",
+      "emoji": "🎏",
+      "desc": "Anima 动画渲染向：舞蹈瞬间+飘带+柔和光。qwen 编码器吃中文。",
+      "pos": "masterpiece, best quality, 1girl, solo, white hanfu, flowing sleeves, mid-dance pose, ribbon dancing in air, hair blown by wind, ancient palace, volumetric light, god rays, dreamy glow, ethereal, full body",
+      "neg": "lowres, bad anatomy, bad hands, watermark",
+      "blocks": [
+        { "cat": "质量词", "t": "masterpiece, best quality, absurdres" },
+        { "cat": "主体人物", "t": "1girl, solo" },
+        { "cat": "服装造型", "t": "white hanfu, flowing sleeves" },
+        { "cat": "表情动作", "t": "mid-dance pose" },
+        { "cat": "表情动作", "t": "hair blown by wind" },
+        { "cat": "场景环境", "t": "ancient palace, carved pillars" },
+        { "cat": "光影氛围", "t": "volumetric light, god rays" },
+        { "cat": "风格质感", "t": "dreamy glow, soft focus" },
+        { "cat": "风格质感", "t": "ethereal, otherworldly" },
+        { "cat": "镜头构图", "t": "full body" }
+      ]
+    }
+  ]
+}

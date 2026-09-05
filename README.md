@@ -40,6 +40,7 @@ ComfyUI workflows in the browser and rendering them with one click.
 - **Sorted, filterable UI** — full-table sort by filename, plus live search + filter chips by base model and category.
 - **Local preview generation** — for unmatched / locally trained LoRAs, render a reference image through your own ComfyUI using the right base model + that LoRA, so you can *see* what each one does without leaving the machine.
 - **Browser workflow builder** — multi-select LoRAs (with per-LoRA strength sliders) + base-model picker + structured CN/EN prompt tool (110+ categorized terms + translate-current-prompt) + adjustable sampler/CFG/seed/size + **one-click render** that returns the image to the page.
+- **Inspiration Blocks (`inspiration.html`)** — a building-block prompt composer: ~90 curated tag blocks in 8 layers (subject / pose / outfit / scene / lighting / camera / style / quality), each with a Chinese description and "hot" markers for tags that reliably move the needle. Base-model profiles encode how each model actually wants prompts (Z-Image: plain 4-element natural language, dead negative; Illustrious: Danbooru tags + quality words + `(tag:1.2)` weighting; Pony: `score_9` auto-prefix; …). One-click style recipes (ancient-style, moody portrait, cinematic, dreamy, tomboy, gothic-sino, film-snapshot) load a full proven combo into the canvas. Stack optional LoRAs on top, hit run, and every attempt lands in a rated experiment log you can reload with one click.
 
 ## Privacy
 

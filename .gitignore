@@ -37,3 +37,7 @@ previews/
 # Generated index (never commit: contains local paths & file lists)
 loras.json
 annotations.json
+
+# Inspiration tool generated data (personal experiments)
+experiments.json
+experiments/

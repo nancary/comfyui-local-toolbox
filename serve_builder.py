@@ -38,10 +38,24 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 try:
     from lora_civitai_gallery import default_loras_dir
-except Exception:  # 独立运行时兜底：仅环境变量与常见位置
+except Exception:  # 独立运行时兜底：环境变量 + 常见安装位置（与主脚本同逻辑）
     def default_loras_dir():
         env = os.environ.get("COMFYUI_LORAS_DIR")
-        return os.path.abspath(env) if env and os.path.isdir(env) else None
+        if env and os.path.isdir(env):
+            return os.path.abspath(env)
+        home = os.path.expanduser("~")
+        cands = [os.path.join(home, "ComfyUI", "models", "loras"),
+                 os.path.join(home, "comfyui", "models", "loras")]
+        if os.name == "nt":
+            cands += ["D:/ComfyUI/models/loras",
+                      os.path.join(home, "Documents", "ComfyUI", "models", "loras")]
+        else:
+            cands += ["/opt/ComfyUI/models/loras"]
+        cands += ["./loras", "./models/loras"]
+        for c in cands:
+            if os.path.isdir(c):
+                return os.path.abspath(c)
+        return None
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_WWW = HERE
@@ -190,6 +204,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, json.dumps(ann, ensure_ascii=False).encode(), "application/json; charset=utf-8")
             return
 
+        if path == "/api/ideas":
+            ideas = self._load_ideas()
+            self._send(200, json.dumps(ideas, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+            return
+
         if path.startswith("/comfy/"):
             self._proxy_comfy_get(path, url.query)
             return
@@ -235,6 +254,12 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/api/preview":
             self._handle_preview()
+            return
+        if path == "/api/try":
+            self._handle_try()
+            return
+        if path == "/api/ideas":
+            self._handle_ideas()
             return
         if path == "/comfy/prompt":
             n = int(self.headers.get("Content-Length", 0) or 0)
@@ -364,9 +389,8 @@ class Handler(BaseHTTPRequestHandler):
     # ---------- 预览图生成（调 ComfyUI） ----------
     _lora_cache = (0, {})  # (timestamp, map basename->fullname)
 
-    def _comfy_lora_name(self, basename):
-        """把图鉴传来的裸文件名解析成 ComfyUI 认识的含子目录名字（如 Anima\\xxx.safetensors）。
-        命中缓存则直接用，否则拉一次 /object_info/LoraLoader 建立 basename->全名 映射。"""
+    def _comfy_lora_map(self):
+        """basename -> ComfyUI 全名（含子目录）映射，60s 缓存。"""
         now = time.time()
         ts, cache = Handler._lora_cache
         if now - ts > 60:
@@ -381,7 +405,12 @@ class Handler(BaseHTTPRequestHandler):
                 cache = m
             except Exception:
                 pass
-        return cache.get(basename.lower(), basename)
+        return cache
+
+    def _comfy_lora_name(self, basename):
+        """把图鉴传来的裸文件名解析成 ComfyUI 认识的含子目录名字（如 Anima\\xxx.safetensors）。
+        找不到时返回 None（而非原名），让调用方给出清晰报错。"""
+        return self._comfy_lora_map().get(basename.lower())
 
     def _resolve_base(self, base):
         """base 可能是 canonical key / 中文名 / 标签，尽量解析成 bases.json 里的 key。"""
@@ -506,6 +535,14 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
+    def _queue_depth(self):
+        """当前 ComfyUI 队列 (running, pending)——用于给用户解释"排队等待"。"""
+        try:
+            q = json.load(urllib.request.urlopen(self.comfy + "/queue", timeout=6))
+            return len(q.get("queue_running", []) or []), len(q.get("queue_pending", []) or [])
+        except Exception:
+            return 0, 0
+
     def _lora_base_hint(self, fname):
         """读 safetensors 头部元数据推断底模。
         返回 (key, raw)：key 是 bases.json 的键 / "__video__"（视频类，禁止预览）/ ""（未知）。"""
@@ -589,6 +626,9 @@ class Handler(BaseHTTPRequestHandler):
         kind = base_cfg.get("kind", "checkpoint")
         # 解析 ComfyUI 认识的含子目录 LoRA 名
         lora_name = self._comfy_lora_name(fname)
+        if not lora_name:
+            self._send(200, json.dumps({"ok": False, "error": "LoRA 文件在本机 ComfyUI 的 loras 目录中不存在：%s（确认文件已放入并重启过 ComfyUI/刷新）" % fname}).encode(), "application/json; charset=utf-8")
+            return
         # 参数
         try:
             strength = float(data.get("strength", 0.8))
@@ -729,6 +769,278 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             self._send(200, json.dumps({"ok": False, "error": "取回/保存图片失败：%s" % e}).encode(), "application/json; charset=utf-8")
 
+    def _build_try_prompt(self, base_cfg, loras, pos, neg, w, h, seed, steps, cfg_v, sampler, scheduler):
+        """灵感积木出图执行图：任意提示词 + 多 LoRA 链式叠加 + 参数覆盖底模默认。
+        loras: [{"name": 文件名, "strength": 0.8}, ...]（最多 5 个）。"""
+        nodes, c = {}, [0]
+
+        def add(ntype, inputs):
+            c[0] += 1
+            nodes[str(c[0])] = {"class_type": ntype, "inputs": inputs, "_meta": {"title": ntype}}
+            return str(c[0])
+
+        # 解析 LoRA（ComfyUI 需要含子目录路径）
+        chain = []
+        for l in (loras or [])[:5]:
+            name = (l or {}).get("name", "").strip()
+            if not name:
+                continue
+            resolved = self._comfy_lora_name(name)
+            if not resolved:
+                raise RuntimeError("LoRA 文件在本机 ComfyUI 中不存在：%s" % name)
+            try:
+                s = float(l.get("strength", 0.8))
+            except Exception:
+                s = 0.8
+            chain.append((resolved, max(0.0, min(2.0, s))))
+
+        kind = base_cfg.get("kind", "checkpoint")
+        if kind == "diffusion":
+            m = base_cfg.get("model", {})
+            unet = self._combo_exists("UNETLoader", "unet_name", m.get("unet", ""))
+            clip = self._combo_exists("CLIPLoader", "clip_name", m.get("clip", ""))
+            vae = self._combo_exists("VAELoader", "vae_name", m.get("vae", ""))
+            missing = [n for n, v in (("UNET", unet), ("CLIP", clip), ("VAE", vae)) if not v]
+            if missing:
+                raise RuntimeError("本环境 ComfyUI 缺少 %s 底模文件（%s）"
+                                   % (base_cfg.get("name"), "、".join(missing)))
+            u = add("UNETLoader", {"unet_name": unet, "weight_dtype": "default"})
+            cp = add("CLIPLoader", {"clip_name": clip, "type": m.get("clip_type", "lumina2"), "device": "default"})
+            vd = add("VAELoader", {"vae_name": vae})
+            model_ref, clip_ref = [u, 0], [cp, 0]
+            if base_cfg.get("shift"):
+                ms = add("ModelSamplingAuraFlow", {"model": model_ref, "shift": float(base_cfg["shift"])})
+                model_ref = [ms, 0]
+            for lname, s in chain:
+                if base_cfg.get("lora") == "LoraLoaderModelOnly":
+                    lo = add("LoraLoaderModelOnly", {"model": model_ref, "lora_name": lname, "strength_model": s})
+                    model_ref = [lo, 0]
+                else:
+                    lo = add("LoraLoader", {"model": model_ref, "clip": clip_ref, "lora_name": lname,
+                                            "strength_model": s, "strength_clip": s})
+                    model_ref, clip_ref = [lo, 0], [lo, 1]
+        else:
+            ck = add("CheckpointLoaderSimple", {"ckpt_name": self._resolve_ckpt(base_cfg)})
+            model_ref, clip_ref = [ck, 0], [ck, 1]
+            vd = None
+            for lname, s in chain:
+                lo = add("LoraLoader", {"model": model_ref, "clip": clip_ref, "lora_name": lname,
+                                        "strength_model": s, "strength_clip": s})
+                model_ref, clip_ref = [lo, 0], [lo, 1]
+        pos_n = add("CLIPTextEncode", {"text": pos, "clip": clip_ref})
+        neg_n = add("CLIPTextEncode", {"text": neg, "clip": clip_ref})
+        lat = add("EmptyLatentImage", {"width": w, "height": h, "batch_size": 1})
+        ks = add("KSampler", {
+            "model": model_ref, "positive": [pos_n, 0], "negative": [neg_n, 0],
+            "latent_image": [lat, 0], "seed": seed, "steps": int(steps), "cfg": float(cfg_v),
+            "sampler_name": sampler, "scheduler": scheduler, "denoise": 1.0,
+        })
+        if kind == "diffusion":
+            dec = add("VAEDecode", {"samples": [ks, 0], "vae": [vd, 0]})
+        else:
+            dec = add("VAEDecode", {"samples": [ks, 0], "vae": [ck, 2]})
+        add("SaveImage", {"images": [dec, 0], "filename_prefix": "inspiration_try"})
+        return {"prompt": nodes, "client_id": "inspiration_" + uuid.uuid4().hex[:8]}
+
+    def _submit_and_wait(self, prompt, kind):
+        """提交执行图并轮询结果（checkpoint 类先清显存；撞上本机 free_memory 驱逐 bug 自动重试）。
+        返回 (out_img_dict, real_err)。"""
+        MAX_TRY = 3
+        for attempt in range(1, MAX_TRY + 1):
+            if kind == "checkpoint":
+                self._comfy_free()
+            prompt_id = None
+            try:
+                req = urllib.request.Request(self.comfy + "/prompt", data=json.dumps(prompt).encode(),
+                                             headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    prompt_id = json.loads(r.read()).get("prompt_id")
+            except urllib.error.HTTPError as e:
+                body = b""
+                try:
+                    body = e.read().decode("utf-8", "ignore")
+                except Exception:
+                    pass
+                return None, "提交 ComfyUI 失败 %s：%s" % (e.code, body[:600])
+            except Exception as e:
+                return None, "提交 ComfyUI 失败：%s（请确认 ComfyUI 已启动且 %s 可达）" % (e, self.comfy)
+            out, real_err = None, None
+            deadline = time.time() + 600
+            while time.time() < deadline:
+                try:
+                    with urllib.request.urlopen(self.comfy + "/history/" + prompt_id, timeout=10) as r:
+                        hist = json.loads(r.read())
+                    item = hist.get(prompt_id)
+                    if item:
+                        if item.get("status", {}).get("status_str") == "error":
+                            for m in item.get("status", {}).get("messages", []):
+                                if m and m[0] == "execution_error":
+                                    real_err = "ComfyUI 执行报错（%s）：%s" % (
+                                        m[1].get("node_type"), m[1].get("exception_message"))
+                                    break
+                            if not real_err:
+                                real_err = "ComfyUI 执行报错，但未取到详细信息"
+                            break
+                        for node in item.get("outputs", {}).values():
+                            for img in node.get("images", []):
+                                out = img
+                                break
+                            if out:
+                                break
+                    if out:
+                        break
+                except Exception:
+                    pass
+                time.sleep(2)
+            if out:
+                return out, None
+            transient = real_err and ("is_dynamic" in real_err or "list index out of range" in real_err)
+            if transient and attempt < MAX_TRY:
+                self._comfy_free()
+                time.sleep(3)
+                continue
+            return None, (real_err or "ComfyUI 生成超时（本机 GPU 单图可能需数分钟，可重试或换更小分辨率）")
+        return None, "重试次数耗尽"
+
+    def _fetch_image_bytes(self, out):
+        """按 /view 接口取回生成的图片字节。"""
+        q = urllib.parse.urlencode({
+            "filename": out.get("filename", ""),
+            "subfolder": out.get("subfolder", ""),
+            "type": out.get("type", "output"),
+        })
+        with urllib.request.urlopen(self.comfy + "/view?" + q, timeout=30) as r:
+            return r.read()
+
+    def _handle_try(self):
+        """灵感积木：任意提示词 + 底模 + 可选 LoRA 叠加 → ComfyUI 出图。
+        图片落盘 experiments/ 目录，返回路径；实验记录由前端经 /api/ideas 保存。"""
+        n = int(self.headers.get("Content-Length", 0) or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        try:
+            data = json.loads(raw)
+        except Exception:
+            self._send(400, json.dumps({"ok": False, "error": "bad json"}).encode(), "application/json; charset=utf-8")
+            return
+        key, base_cfg = self._resolve_base(data.get("base", ""))
+        if not base_cfg:
+            self._send(200, json.dumps({"ok": False, "error": "无法识别底模：%s（请先选择底模）" % data.get("base")}).encode(),
+                       "application/json; charset=utf-8")
+            return
+        pos = (data.get("pos") or "").strip()
+        if not pos:
+            self._send(200, json.dumps({"ok": False, "error": "提示词为空——先搭几块积木再试。"}).encode(),
+                       "application/json; charset=utf-8")
+            return
+        neg = data.get("neg") or ""
+        try:
+            w = int(data.get("width", 768)); h = int(data.get("height", 1024))
+        except Exception:
+            w, h = 768, 1024
+        w = max(256, min(2048, w)); h = max(256, min(2048, h))
+        try:
+            seed = int(data.get("seed", 0) or 0)
+        except Exception:
+            seed = 0
+        if not seed:
+            seed = uuid.uuid4().int % (2 ** 31)
+        steps = data.get("steps") or base_cfg.get("steps", 25)
+        cfg_v = data.get("cfg") if data.get("cfg") is not None else base_cfg.get("cfg", 3.5)
+        sampler = data.get("sampler") or base_cfg.get("sampler", "euler")
+        scheduler = data.get("scheduler") or base_cfg.get("scheduler", "simple")
+        try:
+            steps = int(steps); cfg_v = float(cfg_v)
+        except Exception:
+            steps, cfg_v = int(base_cfg.get("steps", 25)), float(base_cfg.get("cfg", 3.5))
+        try:
+            prompt = self._build_try_prompt(base_cfg, data.get("loras") or [], pos, neg, w, h, seed,
+                                            steps, cfg_v, sampler, scheduler)
+        except RuntimeError as e:
+            self._send(200, json.dumps({"ok": False, "error": str(e)}).encode(), "application/json; charset=utf-8")
+            return
+        out, err = self._submit_and_wait(prompt, base_cfg.get("kind", "checkpoint"))
+        if err:
+            msg = err
+            run, pend = self._queue_depth()
+            if run + pend > 0:
+                msg += "｜注意：ComfyUI 队列正忙（%d 在跑 + %d 排队），你的任务仍在队列中会执行，出图会出现在 ComfyUI 的 output 目录（inspiration_try 前缀）；等队列空了再试可自动存入实验记录。" % (run, pend)
+            else:
+                msg += "（本机 GPU 单图可能需数分钟，可重试或换更小分辨率）"
+            if "is_dynamic" in msg or "list index out of range" in msg:
+                msg += "（本机 ComfyUI 的显存驱逐 bug，已自动清显存重试仍失败，请稍后再试）"
+            self._send(200, json.dumps({"ok": False, "error": msg}).encode(), "application/json; charset=utf-8")
+            return
+        try:
+            img_bytes = self._fetch_image_bytes(out)
+            fname = time.strftime("idea_%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:4] + ".png"
+            exp_dir = os.path.join(os.path.dirname(self.previews_dir), "experiments")
+            os.makedirs(exp_dir, exist_ok=True)
+            out_path = os.path.join(exp_dir, fname)
+            with open(out_path, "wb") as f:
+                f.write(img_bytes)
+            self._send(200, json.dumps({
+                "ok": True, "img": "experiments/" + urllib.parse.quote(fname), "seed": seed,
+                "used": {"base": key, "steps": steps, "cfg": cfg_v, "sampler": sampler,
+                         "scheduler": scheduler, "width": w, "height": h},
+            }, ensure_ascii=False).encode(), "application/json; charset=utf-8")
+        except Exception as e:
+            self._send(200, json.dumps({"ok": False, "error": "取回/保存图片失败：%s" % e}).encode(),
+                       "application/json; charset=utf-8")
+
+    _IDEA_LOCK = threading.Lock()
+
+    def _load_ideas(self):
+        try:
+            with open(self.experiments_file, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+
+    def _save_ideas(self, data):
+        tmp = self.experiments_file + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=1)
+        os.replace(tmp, self.experiments_file)
+
+    def _handle_ideas(self):
+        """灵感积木实验记录：GET 列表；POST {op: save|del|rate}。"""
+        n = int(self.headers.get("Content-Length", 0) or 0)
+        raw = self.rfile.read(n) if n else b"{}"
+        try:
+            data = json.loads(raw)
+        except Exception:
+            self._send(400, json.dumps({"ok": False, "error": "bad json"}).encode(), "application/json; charset=utf-8")
+            return
+        with self._IDEA_LOCK:
+            ideas = self._load_ideas()
+            op = data.get("op", "save")
+            if op == "save":
+                rec = data.get("record") or {}
+                rec.setdefault("id", uuid.uuid4().hex[:10])
+                rec.setdefault("created_at", time.strftime("%Y-%m-%d %H:%M:%S"))
+                rec.setdefault("rating", 0)
+                ideas.insert(0, rec)
+                ideas = ideas[:300]  # 上限保护
+            elif op == "del":
+                ideas = [r for r in ideas if r.get("id") != data.get("id")]
+            elif op == "rate":
+                for r in ideas:
+                    if r.get("id") == data.get("id"):
+                        try:
+                            r["rating"] = max(0, min(5, int(data.get("rating", 0))))
+                        except Exception:
+                            r["rating"] = 0
+                        break
+            else:
+                self._send(400, json.dumps({"ok": False, "error": "未知 op"}).encode(), "application/json; charset=utf-8")
+                return
+            try:
+                self._save_ideas(ideas)
+            except Exception as e:
+                self._send(500, json.dumps({"ok": False, "error": str(e)}).encode(), "application/json; charset=utf-8")
+                return
+        self._send(200, json.dumps({"ok": True, "count": len(ideas)}).encode(), "application/json; charset=utf-8")
+
     def _proxy_comfy_get(self, path, query):
         target = self.comfy + path[len("/comfy"):]
         if query:
@@ -759,6 +1071,7 @@ class Server(ThreadingHTTPServer):
         Handler.loras_dir = loras_dir
         Handler.annotations_file = annotations_file or os.path.join(os.path.abspath(www), ANNOTATIONS_JSON)
         Handler.previews_dir = previews_dir or os.path.join(os.path.abspath(www), "previews")
+        Handler.experiments_file = os.path.join(os.path.abspath(www), "experiments.json")
         self.www = os.path.abspath(www)
         super().__init__(addr, Handler)
 
@@ -774,8 +1087,7 @@ def main():
     # LoRA 目录：--loras-dir > 环境变量/常见位置自动探测；找不到给清晰提示
     loras_dir = args.loras_dir or DEFAULT_LORAS or default_loras_dir()
     if not loras_dir or not os.path.isdir(loras_dir):
-        ap.error("未找到 LoRA 目录：请用 --loras-dir 指定，或设置环境变量 COMFYUI_LORAS_DIR\n"
-                 "  例：python serve_builder.py --loras-dir /path/to/ComfyUI/models/loras")
+        ap.error("未找到 LoRA 目录：请用 --loras-dir 指定，或设置环境变量 COMFYUI_LORAS_DIR。例：python serve_builder.py --loras-dir /path/to/ComfyUI/models/loras")
 
     ensure_loras_json(args.www, loras_dir)
     n = len(json.load(open(os.path.join(args.www, LORAS_JSON), encoding="utf-8")).get("loras", []))

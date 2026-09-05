@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>灵感积木 · Inspiration Blocks</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --card:#ffffff; --ink:#1c2330; --sub:#68738a; --line:#e3e7ee;
+    --accent:#6d5efc; --accent2:#22b8a6; --warn:#e8912d; --hot:#f59e0b;
+    --shadow:0 1px 3px rgba(20,30,60,.07),0 8px 24px rgba(20,30,60,.06);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--ink); font:14px/1.6 "Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }
+  button { font-family:inherit; cursor:pointer; }
+  .wrap { max-width:1560px; margin:0 auto; padding:18px 22px 60px; }
+
+  /* ===== 顶栏 ===== */
+  .topbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px; }
+  .topbar h1 { font-size:20px; font-weight:700; letter-spacing:.5px; }
+  .topbar h1 span { color:var(--accent); }
+  .topbar .sub { color:var(--sub); font-size:12.5px; }
+  .topbar .right { margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .toolbtn { border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:9px; padding:7px 12px; font-size:13px; }
+  .toolbtn:hover { border-color:var(--accent); color:var(--accent); }
+  a.toolbtn { text-decoration:none; }
+
+  /* ===== 底模条 ===== */
+  .baserow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .baserow .lbl { color:var(--sub); font-size:12.5px; min-width:58px; }
+  .chip { border:1px solid var(--line); background:#fff; color:var(--ink); padding:5px 13px; border-radius:999px; cursor:pointer; font-size:12.5px; }
+  .chip:hover { border-color:var(--accent); }
+  .chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .tips { background:linear-gradient(135deg,#f4f2ff,#eefaf7); border:1px solid var(--line); border-radius:12px; padding:10px 14px; margin-bottom:14px; font-size:12.8px; color:#3c4257; }
+  .tips b { color:var(--accent); }
+  .tips li { margin-left:18px; }
+
+  /* ===== 主体三栏 ===== */
+  .cols { display:grid; grid-template-columns:330px 1fr 300px; gap:14px; align-items:start; }
+  @media (max-width:1200px){ .cols { grid-template-columns:1fr; } }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:14px; }
+
+  /* 左：标签库 */
+  .catrow { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .cattab { border:1px solid var(--line); background:#fff; padding:4px 10px; border-radius:8px; font-size:12.5px; cursor:pointer; }
+  .cattab.active { background:var(--ink); color:#fff; border-color:var(--ink); }
+  #tagSearch { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:9px; font-size:13px; margin-bottom:10px; }
+  .tagpool { display:flex; flex-direction:column; gap:5px; max-height:520px; overflow-y:auto; }
+  .tagitem { display:flex; justify-content:space-between; gap:8px; border:1px solid var(--line); border-radius:9px; padding:6px 9px; cursor:pointer; font-size:12.8px; align-items:center; }
+  .tagitem:hover { border-color:var(--accent); background:#faf9ff; }
+  .tagitem .zh { flex:1; }
+  .tagitem .en { color:var(--sub); font-size:11px; text-align:right; max-width:45%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tagitem .star { color:var(--hot); font-size:11px; margin-right:2px; }
+
+  /* 中：画布 */
+  .canvashead { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .canvashead h3 { font-size:15px; }
+  .canvashead .cnt { color:var(--sub); font-size:12px; }
+  #blocks { display:flex; flex-direction:column; gap:6px; min-height:120px; }
+  .bblock { display:flex; align-items:center; gap:7px; border:1px solid var(--line); border-radius:10px; padding:6px 9px; background:#fbfcfe; font-size:12.8px; }
+  .bblock .cat { color:var(--sub); font-size:11px; min-width:56px; }
+  .bblock .txt { flex:1; }
+  .bblock .txt b { color:var(--accent); }
+  .mini { border:1px solid var(--line); background:#fff; border-radius:6px; width:22px; height:22px; font-size:12px; line-height:1; }
+  .mini:hover { border-color:var(--accent); color:var(--accent); }
+  .mini.del:hover { border-color:#e5484d; color:#e5484d; }
+  .bblock.dragging { opacity:.4; }
+  #dropHint { color:var(--sub); font-size:12.5px; text-align:center; padding:26px 0; border:1.5px dashed var(--line); border-radius:10px; }
+  .finalrow { margin-top:12px; }
+  .finalrow label { font-size:12.5px; color:var(--sub); display:flex; justify-content:space-between; align-items:center; }
+  #finalPos { width:100%; min-height:88px; margin-top:5px; padding:9px 11px; border:1px solid var(--line); border-radius:10px; font:12.5px/1.7 Consolas,monospace; resize:vertical; background:#fbfcfe; color:var(--ink); }
+  .negrow { margin-top:8px; }
+  #finalNeg { width:100%; min-height:44px; padding:8px 11px; border:1px solid var(--line); border-radius:10px; font:12.5px/1.7 Consolas,monospace; resize:vertical; background:#fbfcfe; }
+  .negoff { color:var(--sub); font-size:11.5px; margin-top:3px; }
+
+  /* LoRA 叠加 */
+  .lorarow { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  #loraSel { flex:1; min-width:130px; padding:7px 9px; border:1px solid var(--line); border-radius:9px; font-size:12.5px; }
+  #loraStr { width:64px; padding:7px 8px; border:1px solid var(--line); border-radius:9px; font-size:12.5px; }
+  .lorachips { display:flex; gap:6px; flex-wrap:wrap; margin-top:7px; }
+  .lorachip { display:flex; align-items:center; gap:6px; background:#f1efff; border:1px solid #ddd9ff; border-radius:999px; padding:4px 6px 4px 11px; font-size:12px; }
+  .lorachip input { width:46px; border:1px solid #ddd9ff; border-radius:6px; font-size:11.5px; padding:2px 4px; }
+
+  /* 右：生成与配方 */
+  .genpanel .row { display:flex; gap:6px; margin-bottom:8px; }
+  .genpanel select, .genpanel input { padding:7px 9px; border:1px solid var(--line); border-radius:9px; font-size:12.5px; background:#fff; color:var(--ink); }
+  .genpanel .p2 { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px; }
+  .genpanel .p3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:10px; }
+  .genpanel label { font-size:11.5px; color:var(--sub); display:block; margin-bottom:2px; }
+  #genBtn { width:100%; padding:12px; border:none; border-radius:11px; background:linear-gradient(135deg,var(--accent),#8f7bff); color:#fff; font-size:15px; font-weight:700; letter-spacing:1px; }
+  #genBtn:hover { filter:brightness(1.07); }
+  #genBtn:disabled { opacity:.55; cursor:not-allowed; }
+  .genstatus { font-size:12.3px; color:var(--sub); margin-top:7px; min-height:18px; }
+  .genstatus.err { color:#e5484d; }
+  #resultImg { width:100%; border-radius:11px; margin-top:9px; display:none; border:1px solid var(--line); }
+  .resact { display:flex; gap:6px; margin-top:6px; }
+
+  /* 配方卡 */
+  .recipe { border:1px solid var(--line); border-radius:11px; padding:9px 11px; margin-bottom:8px; cursor:pointer; }
+  .recipe:hover { border-color:var(--accent); background:#faf9ff; }
+  .recipe .t { font-weight:600; font-size:13px; }
+  .recipe .d { color:var(--sub); font-size:11.8px; margin-top:2px; }
+  .recipe .b { display:inline-block; margin-top:4px; font-size:10.5px; background:#eefaf7; color:#17877a; border-radius:6px; padding:1px 7px; }
+
+  /* 实验记录 */
+  .exphead { display:flex; align-items:center; margin:22px 0 10px; }
+  .exphead h2 { font-size:16px; }
+  .exphead .clr { margin-left:auto; }
+  .expgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:12px; }
+  .expcard { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:var(--shadow); }
+  .expcard img { width:100%; aspect-ratio:1/1.15; object-fit:cover; cursor:pointer; display:block; }
+  .expcard .meta { padding:8px 10px; font-size:11.8px; }
+  .expcard .meta .b { color:var(--accent2); font-weight:600; }
+  .expcard .meta .p { color:var(--sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .expcard .ops { display:flex; gap:4px; padding:0 10px 9px; align-items:center; }
+  .stars { color:#d9dde5; font-size:15px; cursor:pointer; letter-spacing:1px; }
+  .stars .on { color:var(--hot); }
+  .expcard .ops .mini { margin-left:auto; }
+  .empty { color:var(--sub); text-align:center; padding:30px; font-size:13px; }
+  .banner { background:#fff7e8; border:1px solid #f2d9a6; color:#7a5416; border-radius:10px; padding:9px 14px; font-size:13px; margin-bottom:12px; display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="fileHint" class="banner">⚠ 当前以 file:// 直接打开——生成/记录功能需要本地服务。请运行 <b>python start.py</b> 后访问 <b>http://127.0.0.1:8090/inspiration.html</b>。</div>
+
+  <div class="topbar">
+    <h1>灵感积木 <span>Blocks</span></h1>
+    <span class="sub">分层标签像搭积木一样堆出画面 → 一键试跑 → 记录实验</span>
+    <div class="right">
+      <a class="toolbtn" href="/gallery.html">← 返回图鉴</a>
+    </div>
+  </div>
+
+  <div class="baserow" id="baseRow"><span class="lbl">底模</span></div>
+  <div class="tips" id="tips"></div>
+
+  <div class="cols">
+    <!-- 左：标签库 -->
+    <div class="panel">
+      <div class="catrow" id="catRow"></div>
+      <input id="tagSearch" type="text" placeholder="搜索标签（中文/英文都行）…">
+      <div class="tagpool" id="tagPool"></div>
+    </div>
+
+    <!-- 中：积木画布 -->
+    <div class="panel">
+      <div class="canvashead">
+        <h3>🧩 积木画布</h3>
+        <span class="cnt" id="blockCnt">0 块</span>
+        <button class="toolbtn" style="margin-left:auto" onclick="clearCanvas()">清空</button>
+      </div>
+      <div id="blocks"></div>
+      <div class="finalrow">
+        <label><span>最终提示词（自动拼接，可手改；手改后以你改的为准）</span>
+          <button class="mini" title="重新按积木拼接" onclick="rebuildFinal(true)">↻</button></label>
+        <textarea id="finalPos" spellcheck="false"></textarea>
+      </div>
+      <div class="negrow">
+        <label>负面提示词 <span id="negNote"></span></label>
+        <textarea id="finalNeg" spellcheck="false"></textarea>
+        <div class="negoff" id="negOff" style="display:none">ℹ 该底模 cfg=1，负面词不参与采样（占位无副作用）</div>
+      </div>
+      <div class="lorarow">
+        <select id="loraSel"><option value="">+ 叠加 LoRA（可选）…</option></select>
+        <input id="loraStr" type="text" value="0.8" title="LoRA 强度">
+        <button class="toolbtn" onclick="addLora()">加入</button>
+      </div>
+      <div class="lorachips" id="loraChips"></div>
+    </div>
+
+    <!-- 右：生成 + 配方 -->
+    <div class="panel genpanel">
+      <div class="p2">
+        <div><label>尺寸</label>
+          <select id="sizeSel">
+            <option value="832x1216">832×1216 竖</option>
+            <option value="768x1024">768×1024 竖</option>
+            <option value="1024x1024">1024×1024 方</option>
+            <option value="1216x832">1216×832 横</option>
+            <option value="1080x1920">1080×1920 手机竖</option>
+          </select></div>
+        <div><label>种子（留空随机）</label><input id="seedIn" type="text" placeholder="随机"></div>
+      </div>
+      <div class="p3">
+        <div><label>步数</label><input id="stepsIn" type="text"></div>
+        <div><label>CFG</label><input id="cfgIn" type="text"></div>
+        <div><label>采样器</label><input id="samplerIn" type="text"></div>
+      </div>
+      <button id="genBtn" onclick="generate()">⚡ 试跑这张灵感</button>
+      <div class="genstatus" id="genStatus"></div>
+      <img id="resultImg" alt="生成结果">
+      <div class="resact" id="resAct" style="display:none">
+        <button class="toolbtn" onclick="rerollSeed()">🎲 换种子再跑</button>
+        <button class="toolbtn" onclick="openBig()">🔍 看大图</button>
+      </div>
+
+      <div style="margin:16px 0 8px; font-size:13.5px; font-weight:700;">📋 成熟风格配方 <span style="color:var(--sub);font-weight:400;font-size:11.5px">点击整套装入画布</span></div>
+      <div id="recipeList"></div>
+    </div>
+  </div>
+
+  <!-- 实验记录 -->
+  <div class="exphead">
+    <h2>🧪 实验记录 <span class="cnt" id="expCnt" style="color:var(--sub);font-size:12.5px"></span></h2>
+    <button class="toolbtn clr" onclick="clearIdeas()">清空记录</button>
+  </div>
+  <div class="expgrid" id="expGrid"></div>
+</div>
+
+<script>
+"use strict";
+let LIB = null, LORAS = [];
+let curBase = localStorage.getItem("ib_base") || "zimage";
+let curCat = 0;
+let canvas = [];          // [{cat, t, w}]
+let loras = [];           // [{name, strength}]
+let negManual = false;    // 用户手改过负面词就不再自动覆盖
+let posManual = false;    // 用户手改过最终提示词
+let lastResult = null;    // {img, seed, record}
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+async function jget(u){ const r = await fetch(u); if(!r.ok) throw new Error(u+" -> "+r.status); return r.json(); }
+async function jpost(u, obj){ const r = await fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(obj)}); return r.json(); }
+
+/* ---------- 初始化 ---------- */
+async function init(){
+  if(location.protocol === "file:") $("fileHint").style.display = "block";
+  try { LIB = await jget("/prompt_library.json"); } catch(e){ LIB = {bases:{},blocks:[],recipes:[]}; }
+  try { const d = await jget("/loras.json"); LORAS = Array.isArray(d) ? d : (d.loras||[]); } catch(e){ LORAS = []; }
+  renderBases(); renderCats(); renderTags(); renderRecipes(); renderLoraSel(); applyBase(true); renderExps();
+}
+
+/* ---------- 底模 ---------- */
+function renderBases(){
+  const row = $("baseRow");
+  row.querySelectorAll(".chip").forEach(c=>c.remove());
+  Object.keys(LIB.bases||{}).forEach(k=>{
+    const b = document.createElement("button");
+    b.className = "chip"+(k===curBase?" active":"");
+    b.textContent = (LIB.bases[k]||{}).name || k;
+    b.onclick = ()=>{ curBase=k; localStorage.setItem("ib_base",k); posManual=false; negManual=false;
+      renderBases(); applyBase(); };
+    row.appendChild(b);
+  });
+}
+function applyBase(initMode){
+  const bp = (LIB.bases||{})[curBase] || {};
+  $("tips").innerHTML = "<b>"+esc(bp.name||curBase)+" 的提示词特点：</b><ul>"+
+    (bp.tips||[]).map(t=>"<li>"+esc(t)+"</li>").join("")+"</ul>";
+  const p = bp.params||{};
+  $("stepsIn").value = p.steps!=null?p.steps:"";
+  $("cfgIn").value = p.cfg!=null?p.cfg:"";
+  $("samplerIn").value = p.sampler||"";
+  if(!negManual) $("finalNeg").value = bp.default_neg||"";
+  $("negOff").style.display = (parseFloat(p.cfg)===1) ? "block":"none";
+  $("negNote").textContent = (parseFloat(p.cfg)===1) ? "（cfg=1 不生效）" : "";
+  if(!initMode && !posManual) rebuildFinal();
+  renderTags(); renderCanvas();
+}
+
+/* ---------- 标签库 ---------- */
+function renderCats(){
+  const row = $("catRow"); row.innerHTML="";
+  (LIB.blocks||[]).forEach((blk,i)=>{
+    const b=document.createElement("button");
+    b.className="cattab"+(i===curCat?" active":"");
+    b.textContent=blk.cat;
+    b.onclick=()=>{ curCat=i; renderCats(); renderTags(); };
+    row.appendChild(b);
+  });
+}
+function renderTags(){
+  const pool=$("tagPool"); pool.innerHTML="";
+  const q=($("tagSearch").value||"").toLowerCase().trim();
+  const items=[];
+  (LIB.blocks||[]).forEach((blk,ci)=>{
+    (blk.items||[]).forEach(it=>{
+      if(q && !(it.t.toLowerCase().includes(q) || (it.zh||"").toLowerCase().includes(q))) return;
+      items.push({ci, it});
+    });
+  });
+  if(!q && LIB.blocks[curCat]) {
+    LIB.blocks[curCat].items.forEach(it=>pool.appendChild(tagEl(curCat,it)));
+  } else {
+    items.slice(0,80).forEach(x=>pool.appendChild(tagEl(x.ci,x.it)));
+    if(!items.length) pool.innerHTML='<div class="empty">没有匹配的标签</div>';
+  }
+}
+function tagEl(ci,it){
+  const d=document.createElement("div"); d.className="tagitem";
+  d.innerHTML='<span class="star">'+(it.hot?"★":"")+'</span><span class="zh">'+esc(it.zh)+"</span>"+
+    '<span class="en" title="'+esc(it.t)+'">'+esc(it.t)+"</span>";
+  d.onclick=()=>addBlock(ci,it);
+  return d;
+}
+$("tagSearch").addEventListener("input", renderTags);
+
+/* ---------- 画布 ---------- */
+function addBlock(ci,it){
+  canvas.push({cat:(LIB.blocks[ci]||{}).cat||"", t:it.t, w:1.0});
+  posManual=false; rebuildFinal(); renderCanvas();
+}
+function renderCanvas(){
+  const box=$("blocks"); box.innerHTML="";
+  $("blockCnt").textContent=canvas.length+" 块";
+  if(!canvas.length){ box.innerHTML='<div id="dropHint">从左侧点标签，或右侧装一套风格配方</div>'; return; }
+  const ws = ((LIB.bases||{})[curBase]||{}).weight_syntax;
+  canvas.forEach((b,i)=>{
+    const d=document.createElement("div"); d.className="bblock"; d.draggable=true;
+    d.innerHTML='<span class="cat">'+esc(b.cat)+'</span>'+
+      '<span class="txt">'+(ws==="paren"&&b.w!==1?'<b>(':'')+esc(b.t)+(ws==="paren"&&b.w!==1?":"+b.w+")</b>":"")+"</span>"+
+      (ws==="paren"?'<button class="mini" title="权重-">－</button><button class="mini" title="权重+">＋</button>':"")+
+      '<button class="mini" title="上移">↑</button><button class="mini" title="下移">↓</button>'+
+      '<button class="mini del" title="移除">✕</button>';
+    const [wdec,winc,up,down,del]=d.querySelectorAll("button");
+    if(wdec) wdec.onclick=()=>{ b.w=Math.max(0.6,Math.round((b.w-0.1)*10)/10); posManual=false; renderCanvas(); rebuildFinal(); };
+    if(winc) winc.onclick=()=>{ b.w=Math.min(1.8,Math.round((b.w+0.1)*10)/10); posManual=false; renderCanvas(); rebuildFinal(); };
+    up.onclick=()=>{ if(i>0){[canvas[i-1],canvas[i]]=[canvas[i],canvas[i-1]]; posManual=false; renderCanvas(); rebuildFinal();} };
+    down.onclick=()=>{ if(i<canvas.length-1){[canvas[i+1],canvas[i]]=[canvas[i],canvas[i+1]]; posManual=false; renderCanvas(); rebuildFinal();} };
+    del.onclick=()=>{ canvas.splice(i,1); posManual=false; renderCanvas(); rebuildFinal(); };
+    d.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/plain",String(i)); d.classList.add("dragging"); });
+    d.addEventListener("dragend",()=>d.classList.remove("dragging"));
+    d.addEventListener("dragover",e=>e.preventDefault());
+    d.addEventListener("drop",e=>{
+      e.preventDefault(); const from=+e.dataTransfer.getData("text/plain");
+      if(isNaN(from)||from===i) return;
+      const [m]=canvas.splice(from,1); canvas.splice(i,0,m);
+      posManual=false; renderCanvas(); rebuildFinal();
+    });
+    box.appendChild(d);
+  });
+}
+function clearCanvas(){ canvas=[]; posManual=false; rebuildFinal(); renderCanvas(); }
+
+function ponyAutoPrefix(text){
+  const bp=(LIB.bases||{})[curBase]||{};
+  if(bp.weight_syntax==="paren" && /pony/i.test(bp.name||"")===false && curBase!=="pony") return text;
+  if(curBase!=="pony") return text;
+  if(/score_9/.test(text)) return text;
+  return "score_9, score_8_up, score_7_up, "+text;
+}
+function joinPos(){
+  const bp=(LIB.bases||{})[curBase]||{};
+  const ws=bp.weight_syntax;
+  let parts=canvas.map(b=>{
+    if(ws==="paren" && b.w && b.w!==1.0) return "("+b.t+":"+b.w.toFixed(2).replace(/0$/,"")+")";
+    return b.t;
+  });
+  return ponyAutoPrefix(parts.join(", "));
+}
+function rebuildFinal(force){
+  if(!force && posManual) return;
+  $("finalPos").value = joinPos();
+}
+$("finalPos").addEventListener("input", ()=>{ posManual=true; });
+$("finalNeg").addEventListener("input", ()=>{ negManual=true; });
+
+/* ---------- LoRA ---------- */
+function renderLoraSel(){
+  const sel=$("loraSel"); sel.innerHTML='<option value="">+ 叠加 LoRA（可选）…</option>';
+  LORAS.forEach(l=>{
+    const o=document.createElement("option"); o.value=l.name;
+    o.textContent=(l.name||"").split(/[\\/]/).pop();
+    sel.appendChild(o);
+  });
+}
+function addLora(){
+  const name=$("loraSel").value; if(!name) return;
+  let s=parseFloat($("loraStr").value); if(isNaN(s)) s=0.8; s=Math.max(0,Math.min(2,s));
+  if(loras.some(l=>l.name===name)) { $("loraSel").value=""; return; }
+  loras.push({name,strength:s}); $("loraSel").value=""; renderLoraChips();
+}
+function renderLoraChips(){
+  const box=$("loraChips"); box.innerHTML="";
+  loras.forEach((l,i)=>{
+    const d=document.createElement("span"); d.className="lorachip";
+    d.innerHTML='<b>'+esc(l.name.split(/[\\/]/).pop())+"</b>"+
+      '<input type="text" value="'+l.strength+'" title="强度">'+
+      '<button class="mini del" title="移除">✕</button>';
+    d.querySelector("input").onchange=e=>{ const v=parseFloat(e.target.value); if(!isNaN(v)) loras[i].strength=Math.max(0,Math.min(2,v)); };
+    d.querySelector("button").onclick=()=>{ loras.splice(i,1); renderLoraChips(); };
+    box.appendChild(d);
+  });
+}
+
+/* ---------- 配方 ---------- */
+function renderRecipes(){
+  const box=$("recipeList"); box.innerHTML="";
+  (LIB.recipes||[]).forEach(r=>{
+    const d=document.createElement("div"); d.className="recipe";
+    d.innerHTML='<div class="t">'+r.emoji+" "+esc(r.name)+'</div><div class="d">'+esc(r.desc)+"</div>"+
+      '<span class="b">'+esc((LIB.bases[r.base]||{}).name||r.base)+"</span>";
+    d.onclick=()=>loadRecipe(r);
+    box.appendChild(d);
+  });
+}
+function loadRecipe(r){
+  curBase=r.base; localStorage.setItem("ib_base",curBase); renderBases();
+  canvas=(r.blocks||[]).map(b=>({cat:b.cat,t:b.t,w:1.0}));
+  negManual=false; posManual=false;
+  applyBase(); rebuildFinal(); renderCanvas();
+  $("finalPos").value=r.pos||joinPos();   // 配方带完整成句，直接用
+  if(r.neg!==undefined){ $("finalNeg").value=r.neg; negManual=true; }
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+/* ---------- 生成 ---------- */
+function parseSize(){
+  const [w,h]=($("sizeSel").value||"832x1216").split("x").map(Number);
+  return {w:w||832,h:h||1216};
+}
+async function generate(){
+  if(location.protocol==="file:"){ alert("file:// 下无法生成——请运行 python start.py 后从 http://127.0.0.1:8090/inspiration.html 打开"); return; }
+  const pos=$("finalPos").value.trim();
+  if(!pos){ setStatus("提示词是空的——先搭几块积木，或装一套配方。",true); return; }
+  const {w,h}=parseSize();
+  let seed=0; const sv=$("seedIn").value.trim(); if(sv){ const n=parseInt(sv,10); if(!isNaN(n)) seed=n; }
+  const body={
+    base:curBase, pos, neg:$("finalNeg").value.trim(),
+    loras, width:w, height:h,
+    steps:parseInt($("stepsIn").value,10)||undefined,
+    cfg:parseFloat($("cfgIn").value)||undefined,
+    sampler:$("samplerIn").value.trim()||undefined,
+    seed: seed||undefined,
+  };
+  $("genBtn").disabled=true;
+  setStatus("🎨 生成中…（首次会加载底模，之后单张通常几十秒；请勿关闭页面）");
+  const t0=Date.now();
+  try{
+    const r=await jpost("/api/try",body);
+    if(!r.ok){ setStatus("❌ "+(r.error||"生成失败"),true); $("genBtn").disabled=false; return; }
+    lastResult={img:r.img,seed:r.seed};
+    $("resultImg").src=r.img+"?t="+Date.now();
+    $("resultImg").style.display="block";
+    $("resAct").style.display="flex";
+    setStatus("✅ 完成，用时 "+Math.round((Date.now()-t0)/1000)+"s（种子 "+r.seed+"，已自动存入实验记录）");
+    await saveIdea(body,r);
+    await renderExps();
+  }catch(e){
+    setStatus("❌ 请求失败："+e,true);
+  }
+  $("genBtn").disabled=false;
+}
+async function saveIdea(body,r){
+  await jpost("/api/ideas",{op:"save",record:{
+    base:body.base, pos:body.pos, neg:body.neg, loras:body.loras,
+    img:r.img, seed:r.seed, params:r.used||{},
+    blocks:canvas.map(b=>({cat:b.cat,t:b.t,w:b.w})),
+  }});
+}
+function setStatus(msg,err){ const el=$("genStatus"); el.textContent=msg; el.className="genstatus"+(err?" err":""); }
+function rerollSeed(){ $("seedIn").value=""; generate(); }
+function openBig(){ if(lastResult) window.open(lastResult.img,"_blank"); }
+
+/* ---------- 实验记录 ---------- */
+async function renderExps(){
+  let ideas=[];
+  try{ ideas=await jget("/api/ideas"); }catch(e){}
+  $("expCnt").textContent=ideas.length?("共 "+ideas.length+" 条"):"";
+  const grid=$("expGrid"); grid.innerHTML="";
+  if(!ideas.length){ grid.innerHTML='<div class="empty">还没有实验。搭一套积木点「试跑」，成功的会自动记录在这里。</div>'; return; }
+  ideas.forEach(rec=>{
+    const d=document.createElement("div"); d.className="expcard";
+    d.innerHTML='<img src="'+esc(rec.img)+'?t='+Date.now()+'" loading="lazy" alt="">'+
+      '<div class="meta"><span class="b">'+esc((LIB.bases[rec.base]||{}).name||rec.base)+"</span>"+
+      '<span style="color:var(--sub)"> · '+esc(rec.created_at||"")+"</span>"+
+      '<div class="p" title="'+esc(rec.pos)+"\">"+esc(rec.pos)+"</div></div>"+
+      '<div class="ops"><span class="stars" title="点击评分">'+starsHtml(rec.rating||0)+"</span>"+
+      '<button class="mini" title="载入画布">↺</button><button class="mini del" title="删除">✕</button></div>';
+    const [stars,load,del]=d.querySelectorAll(".ops .mini, .stars, .ops button");
+    const [st]=d.querySelectorAll(".stars");
+    st.onclick=e=>{
+      const idx=[...st.children].indexOf(e.target);
+      if(idx<0) return;
+      jpost("/api/ideas",{op:"rate",id:rec.id,rating:idx+1}).then(renderExps);
+    };
+    const [loadBtn]=d.querySelectorAll('.ops button[title="载入画布"]');
+    loadBtn.onclick=()=>{
+      curBase=rec.base; localStorage.setItem("ib_base",curBase); renderBases();
+      canvas=(rec.blocks&&rec.blocks.length)?rec.blocks.map(b=>({cat:b.cat,t:b.t,w:b.w||1})):[];
+      posManual=false; negManual=true;
+      applyBase(); renderCanvas();
+      $("finalPos").value=rec.pos||joinPos();
+      $("finalNeg").value=rec.neg||"";
+      if(rec.params&&rec.params.width){ $("sizeSel").value=rec.params.width+"x"+rec.params.height; }
+      window.scrollTo({top:0,behavior:"smooth"});
+    };
+    const [delBtn]=d.querySelectorAll('.ops button[title="删除"]');
+    delBtn.onclick=()=>jpost("/api/ideas",{op:"del",id:rec.id}).then(renderExps);
+    d.querySelector("img").onclick=()=>window.open(rec.img,"_blank");
+    grid.appendChild(d);
+  });
+}
+function starsHtml(n){
+  let s="";
+  for(let i=1;i<=5;i++) s+='<span class="'+(i<=n?"on":"")+'">★</span>';
+  return s;
+}
+async function clearIdeas(){
+  if(!confirm("确定清空全部实验记录？（图片文件保留在 experiments/ 目录）")) return;
+  let ideas=[]; try{ ideas=await jget("/api/ideas"); }catch(e){}
+  for(const r of ideas) await jpost("/api/ideas",{op:"del",id:r.id});
+  renderExps();
+}
+
+init();
+</script>
+</body>
+</html>

@@ -7,11 +7,8 @@ LoRA 工具统一启动器（图鉴 + 工作流构建器 共用一个服务）�
   python start.py                 # 默认端口 8090，自动开浏览器跳到图鉴
   python start.py --port 9000     # 指定端口
   python start.py --comfy http://127.0.0.1:8000
-  python start.py --loras-dir /path/to/ComfyUI/models/loras
+  python start.py --loras-dir /path/to/ComfyUI/models/loras   # 缺省自动探测
 
-LoRA 目录不传时自动探测（也可用环境变量 COMFYUI_LORAS_DIR 指定）。
-首次使用请先生成图鉴页：
-  python lora_civitai_gallery.py --loras-dir /path/to/loras
 启动后只面对一个 URL：http://127.0.0.1:<端口>/gallery.html
 不再有「服务模式 / 图鉴模式」之分——服务就是唯一入口。
 """
@@ -26,6 +23,13 @@ import webbrowser
 import threading
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+try:
+    from serve_builder import default_loras_dir
+except Exception:
+    def default_loras_dir():
+        env = os.environ.get("COMFYUI_LORAS_DIR")
+        return os.path.abspath(env) if env and os.path.isdir(env) else None
 
 
 def wait_server(port, timeout=15):
@@ -65,16 +69,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=int(os.environ.get("LORA_PORT", "8090")))
     ap.add_argument("--comfy", default=os.environ.get("COMFY_URL", "http://127.0.0.1:8000"))
-    ap.add_argument("--loras-dir", default=None,
-                    help="LoRA 目录；不传则自动探测（或环境变量 COMFYUI_LORAS_DIR）")
+    ap.add_argument("--loras-dir", default=None)
     ap.add_argument("--no-browser", action="store_true", help="不起浏览器")
     args = ap.parse_args()
-
-    # 首次使用引导：图鉴页尚未生成时给出一键命令（服务仍会启动，构建器可用）
-    if not os.path.exists(os.path.join(HERE, "gallery.html")):
-        print("[start] ⚠️ 尚未生成 gallery.html（图鉴页）。请先执行一次：")
-        print("[start]    python lora_civitai_gallery.py --loras-dir /path/to/loras")
-        print("[start] 生成后重新运行本脚本即可看到图鉴；本次仍会启动服务（工作流构建器可用）。")
 
     # 端口智能处理：已在跑→直接开浏览器；被占→自动换下一个空闲端口
     st = port_state(args.port)
@@ -97,12 +94,15 @@ def main():
         sys.exit(1)
 
     server_py = os.path.join(HERE, "serve_builder.py")
+    loras_dir = args.loras_dir or default_loras_dir()
     cmd = [sys.executable, server_py,
            "--port", str(args.port),
            "--comfy", args.comfy,
            "--www", HERE]
-    if args.loras_dir:
-        cmd += ["--loras-dir", args.loras_dir]
+    if loras_dir:
+        cmd += ["--loras-dir", loras_dir]
+    else:
+        print("[start] ⚠ 未探测到 LoRA 目录（--loras-dir / COMFYUI_LORAS_DIR），服务仍会启动；扫描功能需之后指定。")
     print("[start] 启动统一服务：%s" % " ".join(cmd))
     proc = subprocess.Popen(cmd)
     # 服务进程退出时本启动器也退出
