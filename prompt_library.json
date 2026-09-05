@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "_comment": "灵感积木词库：分层标签块 + 底模提示词档案 + 成熟风格配方。t=英文标签，zh=可直接出图的中文提示词（干净无注释，supports_cn 底模优先用它）；hot=true 表示显性高效词；质量词块的 bases 表示仅适用底模。",
   "bases": {
     "zimage": {
@@ -107,8 +107,9 @@
         { "t": "mature female", "zh": "成熟御姐" },
         { "t": "handsome tomboy girl", "zh": "中性帅气少女", "hot": true },
         { "t": "classical chinese beauty", "zh": "古典东方美人", "hot": true },
-        { "t": "dunhuang flying apsara", "zh": "敦煌飞天乐伎", "hot": true },
+        { "t": "flying apsara", "zh": "飞天仙女", "hot": true },
         { "t": "ethereal fairy maiden", "zh": "空灵仙子" },
+        { "t": "xianxia maiden", "zh": "仙侠风少女" },
         { "t": "schoolgirl", "zh": "女学生" },
         { "t": "city girl", "zh": "都市女孩" },
         { "t": "girl next door", "zh": "邻家女孩" },
@@ -116,7 +117,6 @@
         { "t": "gentle older sister", "zh": "温柔姐姐" },
         { "t": "young couple", "zh": "年轻情侣" },
         { "t": "dancer", "zh": "舞者" },
-        { "t": "musician holding guqin", "zh": "抱古琴的乐伎" },
         { "t": "photographer with camera", "zh": "拿相机的摄影师" },
         { "t": "east asian features", "zh": "东亚面孔" },
         { "t": "delicate facial features", "zh": "精致五官", "hot": true },
@@ -199,8 +199,8 @@
         { "t": "jumping, mid-air", "zh": "跳起瞬间" },
         { "t": "mid-dance pose", "zh": "舞蹈瞬间", "hot": true },
         { "t": "dancing with long silk sleeves", "zh": "水袖挥舞", "hot": true },
-        { "t": "playing guqin", "zh": "抚琴" },
-        { "t": "writing with brush", "zh": "执毛笔书写" },
+        { "t": "twirling", "zh": "原地转圈" },
+        { "t": "taking selfie", "zh": "举手机自拍" },
         { "t": "drinking tea", "zh": "举杯喝茶" },
         { "t": "reading a book", "zh": "翻书阅读" },
         { "t": "holding umbrella", "zh": "撑伞" },
@@ -219,15 +219,15 @@
       "cat": "服装·造型",
       "items": [
         { "t": "white hanfu, flowing sleeves", "zh": "白色汉服·广袖", "hot": true },
-        { "t": "apsara ribbons and silk bands", "zh": "飞天飘带彩绸" },
+        { "t": "silk ribbons and bands", "zh": "彩绸飘带" },
         { "t": "chest-high hanfu dress", "zh": "齐胸襦裙" },
+        { "t": "waist-high hanfu dress", "zh": "齐腰汉服" },
         { "t": "cheongsam, embroidery", "zh": "旗袍·刺绣", "hot": true },
         { "t": "red wedding veil, traditional bride", "zh": "红盖头新娘", "hot": true },
         { "t": "silver thread embroidery, silver jewelry", "zh": "银丝刺绣·银饰", "hot": true },
         { "t": "black gauze dress", "zh": "黑纱裙" },
         { "t": "veil, translucent", "zh": "半透薄纱" },
-        { "t": "silk cloud-shoulder cape", "zh": "云肩" },
-        { "t": "hanfu with wide sash", "zh": "宽腰带汉服" },
+        { "t": "retro hongkong style outfit", "zh": "复古港风穿搭", "hot": true },
         { "t": "school uniform", "zh": "校服" },
         { "t": "jk uniform, pleated skirt", "zh": "JK 制服·百褶裙" },
         { "t": "sailor uniform", "zh": "水手服" },
@@ -249,7 +249,7 @@
         { "t": "silk hair ribbon", "zh": "丝质发带" },
         { "t": "pearl earrings", "zh": "珍珠耳环" },
         { "t": "silver choker", "zh": "银色项圈" },
-        { "t": "traditional dudou", "zh": "肚兜式古装" }
+        { "t": "sporty outfit", "zh": "运动风穿搭" }
       ]
     },
     {
@@ -257,7 +257,7 @@
       "items": [
         { "t": "moonlit rooftop", "zh": "月光天台", "hot": true },
         { "t": "ancient palace, carved beams", "zh": "古宫殿·雕梁画栋" },
-        { "t": "dunhuang cave murals", "zh": "敦煌洞窟壁画" },
+        { "t": "city overpass at night", "zh": "夜晚城市天桥", "hot": true },
         { "t": "bamboo forest", "zh": "竹林" },
         { "t": "water town with canals", "zh": "江南水乡" },
         { "t": "temple corridor", "zh": "寺庙回廊" },
@@ -278,7 +278,8 @@
         { "t": "wildflower meadow", "zh": "野花草甸" },
         { "t": "sunflower field", "zh": "向日葵田" },
         { "t": "rice paddy", "zh": "稻田" },
-        { "t": "sea of clouds from mountain top", "zh": "山顶云海" },
+        { "t": "cozy bedroom", "zh": "温馨卧室" },
+        { "t": "riverside promenade", "zh": "江边步道" },
         { "t": "waterfall and pool", "zh": "瀑布清潭" },
         { "t": "shallow stream", "zh": "溪流浅滩" },
         { "t": "reed marsh at sunset", "zh": "黄昏芦苇荡" },
@@ -394,12 +395,12 @@
       "base": "zimage",
       "emoji": "🌙",
       "desc": "你库里最大的题材：月华逆光+广袖飘带+空灵出尘。Z-Image 中文直出。",
-      "pos": "单人少女，白色汉服广袖，飞天飘带彩绸，风吹乱发，月光天台，月华清辉，侧逆光轮廓光，空灵出尘，浅景深虚化，胶片颗粒",
+      "pos": "单人少女，白色汉服广袖，彩绸飘带，风吹乱发，月光天台，月华清辉，侧逆光轮廓光，空灵出尘，浅景深虚化，胶片颗粒",
       "neg": "",
       "blocks": [
         { "cat": "主体·人物", "t": "1girl, solo", "zh": "单人少女" },
         { "cat": "服装·造型", "t": "white hanfu, flowing sleeves", "zh": "白色汉服·广袖" },
-        { "cat": "服装·造型", "t": "apsara ribbons and silk bands", "zh": "飞天飘带彩绸" },
+        { "cat": "服装·造型", "t": "silk ribbons and bands", "zh": "彩绸飘带" },
         { "cat": "姿态·动作", "t": "hair blown by wind", "zh": "风吹乱发" },
         { "cat": "场景·环境", "t": "moonlit rooftop", "zh": "月光天台" },
         { "cat": "光影·氛围", "t": "moonlight, cool glow", "zh": "月华清辉" },

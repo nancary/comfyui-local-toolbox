@@ -39,7 +39,7 @@
   .tips li { margin-left:18px; }
 
   /* ===== 主三栏（等高面板，各自内部滚动，杜绝重叠错位）===== */
-  .main { display:grid; grid-template-columns:minmax(420px,5fr) minmax(360px,4fr) minmax(320px,3.4fr); gap:12px; align-items:stretch; height:calc(100vh - 168px); min-height:600px; }
+  .main { display:grid; grid-template-columns:minmax(470px,5fr) minmax(360px,3.7fr) minmax(320px,3.2fr); gap:12px; align-items:stretch; height:calc(100vh - 168px); min-height:600px; }
   @media (max-width:1280px){ .main { grid-template-columns:1fr; height:auto; } }
   .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow); padding:12px; display:flex; flex-direction:column; overflow:hidden; }
   .panel > .phead { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex:0 0 auto; }
@@ -58,12 +58,12 @@
   .catnav button.active { background:var(--accent); color:#fff; }
   .catnav button .n { float:right; color:var(--sub); font-size:10.5px; }
   .catnav button.active .n { color:#d9d6ff; }
-  .taggrid { overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill,minmax(136px,1fr)); gap:5px; align-content:start; padding:1px 2px 8px; }
-  .tchip { border:1px solid var(--line); background:#fbfcfe; border-radius:8px; padding:4px 7px; cursor:pointer; line-height:1.28; }
+  .taggrid { overflow-y:auto; display:flex; flex-wrap:wrap; gap:5px; align-content:flex-start; padding:1px 2px 8px; }
+  .tchip { display:flex; align-items:baseline; max-width:192px; border:1px solid var(--line); background:#fbfcfe; border-radius:7px; padding:3px 8px; cursor:pointer; line-height:1.4; }
   .tchip:hover { border-color:var(--accent); background:var(--accent-soft); }
-  .tchip .zh { font-size:12.2px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tchip .zh { font-size:12.3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .tchip .zh .hot { color:var(--hot); margin-right:1px; }
-  .tchip .en { color:var(--sub); font-size:10.4px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tchip .en { color:var(--sub); font-size:10.2px; margin-left:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
   /* 中：画布 */
   .chinthint { color:var(--sub); font-size:11.6px; margin:-3px 0 7px; flex:0 0 auto; }
@@ -72,7 +72,7 @@
   .bblock .idx { flex:0 0 18px; height:18px; border-radius:6px; background:var(--accent); color:#fff; font-size:10.8px; display:flex; align-items:center; justify-content:center; font-weight:700; }
   .bblock .cat { color:var(--sub); font-size:10.6px; min-width:52px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .bblock .txt { flex:1; line-height:1.3; min-width:0; }
-  .bblock .txt .main { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bblock .txt .prim { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .bblock .txt b { color:var(--accent); }
   .bblock .txt .alt { color:var(--sub); font-size:10.8px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .joinarrow { flex:0 0 auto; text-align:center; color:var(--accent); font-size:11.8px; font-weight:600; padding:6px 0 2px; }
@@ -367,7 +367,7 @@ function renderCanvas(){
     const main=blockText(b);
     const alt=(main===b.t)?"":b.t;   // 另一种语言作为小字对照
     d.innerHTML='<span class="idx">'+(i+1)+'</span><span class="cat">'+esc(b.cat)+'</span>'+
-      '<span class="txt"><span class="main">'+(ws==="paren"&&b.w!==1?'<b>(':'')+esc(main)+(ws==="paren"&&b.w!==1?":"+b.w+")</b>":"")+"</span>"+
+      '<span class="txt"><span class="prim">'+(ws==="paren"&&b.w!==1?'<b>(':'')+esc(main)+(ws==="paren"&&b.w!==1?":"+b.w+")</b>":"")+"</span>"+
       (alt?'<span class="alt">'+esc(alt)+"</span>":"")+"</span>"+
       (ws==="paren"?'<button class="mini" title="权重-">－</button><button class="mini" title="权重+">＋</button>':"")+
       '<button class="mini" title="上移">↑</button><button class="mini" title="下移">↓</button>'+
