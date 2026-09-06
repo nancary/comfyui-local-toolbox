@@ -72,6 +72,8 @@ def default_loras_dir():
 # ----------------------------------------------------------------------------
 CIVITAI_BY_HASH = "https://civitai.com/api/v1/model-versions/by-hash/{sha}"
 CIVITAI_MODEL = "https://civitai.com/api/v1/models/{model_id}"
+# 名字兜底搜索：limit 控制结果数，nsfw=true 不漏掉 NSFW（红标）模型
+CIVITAI_SEARCH = "https://civitai.com/api/v1/models?query={q}&limit=8&nsfw=true"
 UA = "Mozilla/5.0 (compatible; LoraGallery/1.0)"
 REQUEST_DELAY = 0.12          # 两次联网之间的礼貌间隔
 READ_TIMEOUT = 25
@@ -628,6 +630,121 @@ def get_version_images(version_id):
     return (clean + fallback)[:MAX_CARD_IMAGES]
 
 
+def _clean_search_name(fname):
+    """文件名 → 搜索关键词：先把分隔符换成空格，再去掉版本号/精度/权重等噪声词
+    （注意必须先换分隔符——'_' 是单词字符，会让 \\b 边界失效）。"""
+    base = re.sub(r"\.safetensors$", "", fname, flags=re.I)
+    base = re.sub(r"[_\-+.]+", " ", base)
+    junk = re.compile(
+        r"\b(?:v\d[\d.]*|sdxl|sd15|sd1\.5|pony|illustrious|noobai|xl|lora|fp8|fp16|pruned|"
+        r"rank\d+|alpha\d*|dim\d+|epoch\d+|last|final|fixed|copy\d*)\b|0?\.\d+", re.I)
+    base = junk.sub(" ", base)
+    base = re.sub(r"\b\d{1,2}\b", " ", base)  # 清掉残留的孤立短数字（如 16.0 拆出的 0）
+    return re.sub(r"\s+", " ", base).strip()
+
+
+def _norm_name(s):
+    return re.sub(r"[^a-z0-9\u4e00-\u9fff]", "", (s or "").lower())
+
+
+def _name_similarity(model_name, fname):
+    """粗略名字相似度：包含关系 > 词重叠，0~2 分。"""
+    mn, fn = _norm_name(model_name), _norm_name(fname)
+    if not mn:
+        return 0.0
+    if mn in fn or fn in mn:
+        return 1.0 + len(mn) / max(len(mn), len(fn))
+    a = set(re.findall(r"[a-z0-9]+|[\u4e00-\u9fff]", (model_name or "").lower()))
+    b = set(re.findall(r"[a-z0-9]+|[\u4e00-\u9fff]", fname.lower()))
+    return (len(a & b) / len(a)) * 0.8 if a else 0.0
+
+
+def search_civitai_by_name(fname, sha):
+    """哈希反查失败后的名字兜底（含 NSFW）。
+    返回 (matched, civ_or_None, guess_or_None)：
+    - 候选模型任一版本的文件 SHA256 与本地一致 → 完全匹配，构建完整 civ
+    - 名字高度相似但没有哈希对上 → 返回 guess（疑似匹配，供面板给链接人工确认）
+    """
+    q = _clean_search_name(fname)
+    if len(q) < 3:
+        return False, None, None
+    st, body = http_get(CIVITAI_SEARCH.format(q=urllib.parse.quote(q)))
+    if st != 200 or not body:
+        return False, None, None
+    try:
+        items = (json.loads(body).get("items")) or []
+    except Exception:
+        return False, None, None
+    best = None  # (score, model)
+    fname_base = re.sub(r"\.safetensors$", "", fname, flags=re.I)
+    for m in items:
+        if str(m.get("type", "")).lower() != "lora":
+            continue
+        s = _name_similarity(m.get("name"), fname_base)
+        if s > 0 and (best is None or s > best[0]):
+            best = (s, m)
+    if not best or best[0] < 0.25:
+        return False, None, None
+    score, m = best
+    # 噪音过滤：重叠词必须含「强 token」（≥4 位字母数字或连续中文），否则只是
+    # 撞上了 z/image/lora 这类泛词（如 Z-范冰冰 撞上 Z-Image xxx），不给出疑似
+    generic = {"z", "image", "lora", "style", "nsfw", "model", "safetensors",
+               "xl", "pony", "flux", "sd", "the", "of", "noobai"}
+    mtok = set(re.findall(r"[a-z0-9]+|[\u4e00-\u9fff]+", (m.get("name") or "").lower()))
+    ftok = set(re.findall(r"[a-z0-9]+|[\u4e00-\u9fff]+", fname_base.lower()))
+    inter = {t for t in (mtok & ftok) if t not in generic}
+    if not any(len(t) >= 4 for t in inter):
+        return False, None, None  # 只撞上 z/image 等泛词的一律不算疑似
+    # 哈希验证：作者更新过文件时，老版本哈希也能对上
+    matched_ver = None
+    for v in m.get("modelVersions") or []:
+        for f in v.get("files") or []:
+            if ((f.get("hashes") or {}).get("SHA256") or "").lower() == (sha or "").lower():
+                matched_ver = v
+                break
+        if matched_ver:
+            break
+    guess = {"model_id": m.get("id"), "name": m.get("name"),
+             "score": round(score, 2), "verified": bool(matched_ver)}
+    if not matched_ver:
+        return False, None, guess
+    civ = {
+        "version_name": matched_ver.get("name"),
+        "version_id": matched_ver.get("id"),
+        "base_model": matched_ver.get("baseModel"),
+        "trained_words": matched_ver.get("trainedWords") or [],
+        "nsfw_level": matched_ver.get("nsfwLevel", 0),
+        "model_id": m.get("id"),
+        "model_name": m.get("name"),
+        "type": m.get("type"),
+        "images": [],
+        "via": "name-search",
+    }
+    clean, fallback = [], []
+    for im in matched_ver.get("images") or []:
+        if im.get("type") == "image" and im.get("url"):
+            (clean if im.get("nsfwLevel", 0) in (0, None) else fallback).append(im["url"])
+    civ["images"] = (clean + fallback)[:MAX_CARD_IMAGES]
+    # 补简介/标签/统计（与 by-hash 流程字段一致）
+    if civ["model_id"]:
+        st, mb = http_get(CIVITAI_MODEL.format(model_id=civ["model_id"]))
+        if st == 200 and mb:
+            try:
+                mm = json.loads(mb)
+                civ["model_name"] = mm.get("name") or civ["model_name"]
+                civ["type"] = mm.get("type") or civ["type"]
+                civ["tags"] = mm.get("tags") or []
+                civ["description_html"] = sanitize_html(mm.get("description") or "")
+                civ["stats"] = mm.get("stats") or {}
+                civ["creator"] = (mm.get("creator") or {}).get("username")
+                bm = mm.get("baseModels") or []
+                if bm:
+                    civ["base_models"] = bm
+            except Exception:
+                pass
+    return True, civ, None
+
+
 def _guess_image_ext(data):
     """根据文件头判断真实图片格式，返回正确扩展名。"""
     if data.startswith(b"\xff\xd8\xff"):
@@ -893,6 +1010,13 @@ def render_card(rec, out_dir):
     if matched:
         url = f"https://civitai.com/models/{civ.get('model_id')}"
         link_html = f'<a class="btn" href="{esc(url)}" target="_blank" rel="noopener">在 Civitai 打开</a>'
+    else:
+        guess = rec.get("guess") or {}
+        if guess.get("model_id"):
+            gurl = f"https://civitai.com/models/{guess['model_id']}"
+            mark = "疑似匹配"
+            link_html = (f'<a class="btn" style="background:#d97706" href="{esc(gurl)}" target="_blank" '
+                         f'rel="noopener">{mark}：{esc(guess.get("name", ""))}</a>')
 
     return CARD_TMPL.format(
         matched="matched" if matched else "unmatched",
@@ -949,17 +1073,29 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
     previews_dir = os.path.join(out_dir, "previews")
     unmatched_recs = [r for r in records if not r.get("civitai")]
     uf_items = []
+    n_hidden_preview = 0
     for r in unmatched_recs:
         rel = r["rel"]
         sub = os.path.dirname(rel) or "根目录"
         fname = os.path.basename(rel)
+        prev = find_local_preview(previews_dir, fname)
+        if prev:
+            # 已有本地预览图（确认可用）的不再列进未匹配清单，只在网格中展示
+            n_hidden_preview += 1
+            continue
         q = urllib.parse.quote(re.sub(r"\.safetensors$", "", fname))
         civ_url = f"https://civitai.com/search/models?q={q}"
         web_url = f"https://www.google.com/search?q={urllib.parse.quote(fname + ' lora civitai')}"
         cat, _, _ = summarize(r)
         lt = r.get("local", {}).get("top_tags", [])
         tags_html = " ".join(f"<span class='pill local'>{esc(t)}</span>" for t in lt[:8]) if lt else ""
-        prev = find_local_preview(previews_dir, fname)
+        guess = r.get("guess") or {}
+        guess_html = ""
+        if guess.get("model_id"):
+            gurl = f"https://civitai.com/models/{guess['model_id']}"
+            mark = "✅已验" if guess.get("verified") else "疑似"
+            guess_html = (f'<a class="uf-guess" href="{esc(gurl)}" target="_blank" rel="noopener">'
+                          f'{mark}：{esc(guess.get("name", ""))}</a>')
         thumb_html = (f'<img class="uf-thumb" loading="lazy" src="{esc(prev)}" alt="">'
                       if prev else '<span class="uf-thumb uf-empty">无图</span>')
         uf_items.append(
@@ -971,10 +1107,13 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
             f'<span class="cat-badge cat-{CAT_CLASS.get(cat, "unknown")}">{esc(cat)}</span></label>'
             f'<div class="uf-actions"><a href="{esc(civ_url)}" target="_blank" rel="noopener">Civitai 搜</a>'
             f'<a href="{esc(web_url)}" target="_blank" rel="noopener">网页搜</a>'
+            f'{guess_html}'
             f'<button type="button" class="uf-gen" data-fname="{esc(fname)}">生成预览图</button></div>'
             f'<div class="uf-tags">{tags_html}</div>'
             f'<div class="uf-note"></div></li>'
         )
+    hidden_note = (f'<span class="uf-hidden-note">另有 {n_hidden_preview} 个已有本地预览图的未匹配 LoRA 直接在下方网格展示，不再列入此清单</span>'
+                   if n_hidden_preview else "")
     unmatched_html = ""
     uf_js = ""
     if uf_items:
@@ -983,10 +1122,9 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
             '<div class="uf-toolbar">'
             '<label class="uf-item"><input type="checkbox" id="ufAll"> 全选</label>'
             '<button type="button" id="ufGenBatch">⚡ 为勾选项生成预览图</button>'
-            '<span id="ufProgress"></span>'
-            '</div>'
+            '<span id="ufProgress"></span>{hidden}</div>'
             '<ul class="uf-list">{items}</ul></details>'
-        ).format(n=len(uf_items), items="".join(uf_items))
+        ).format(n=len(uf_items), items="".join(uf_items), hidden=hidden_note)
         uf_js = """
 <script>
 (function () {
@@ -1149,6 +1287,8 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
   .uf-toolbar button:disabled, .uf-gen:disabled {{ opacity:.55; cursor:wait; }}
   .uf-gen {{ background:#0ea5e9; padding:3px 9px; font-size:11px; }}
   .uf-note {{ width:100%; font-size:11.5px; color:var(--sub); min-height:15px; }}
+  .uf-guess {{ font-size:11.5px; color:var(--accent); font-weight:600; }}
+  .uf-hidden-note {{ font-size:11.5px; color:var(--sub); }}
 </style>
 </head>
 <body>
@@ -1332,10 +1472,10 @@ def main():
         time.sleep(REQUEST_DELAY)
 
     # 增量升级：旧缓存示例图不足的补拉到 MAX_CARD_IMAGES 张；
-    # 未匹配超过 UNMATCHED_RETRY_DAYS 天的用缓存 SHA 重新反查一次（不重新哈希）
+    # 未匹配的用缓存 SHA 重新反查，哈希仍失败再走名字兜底搜索（含 NSFW，各只试一次）
     if not args.dry_run and not args.no_thumbs:
         now = int(time.time())
-        up_imgs = retry_ok = 0
+        up_imgs = retry_ok = retry_name = guess_n = 0
         for rel, c in cache.items():
             civ = c.get("civitai")
             sha = c.get("sha256")
@@ -1356,23 +1496,46 @@ def main():
                     up_imgs += 1
                     time.sleep(REQUEST_DELAY)
             else:
-                if now - (c.get("last_try") or 0) < UNMATCHED_RETRY_DAYS * 86400:
-                    continue
+                if is_video_lora(rel, civ):
+                    continue  # 视频 LoRA 不做任何反查
                 if not sha:
                     continue
-                ok, nciv = query_civitai(sha)
-                c["last_try"] = now
-                if ok and nciv:
-                    c["civitai"] = nciv
-                    matched_n += 1
-                    thumbs = download_thumbs(nciv.get("images") or [], f"thumbs/{sha[:16]}", out_dir)
-                    if thumbs:
-                        c["thumbs"] = thumbs
-                        c["thumb"] = thumbs[0]
-                    retry_ok += 1
-                time.sleep(REQUEST_DELAY)
-        if up_imgs or retry_ok:
-            log(f"增量升级：示例图补齐 {up_imgs} 个，未匹配重试命中 {retry_ok} 个")
+                hash_done = now - (c.get("last_try") or 0) < UNMATCHED_RETRY_DAYS * 86400
+                name_done = bool(c.get("name_tried"))
+                if hash_done and name_done:
+                    continue
+                if not hash_done:
+                    ok, nciv = query_civitai(sha)
+                    c["last_try"] = now
+                    if ok and nciv:
+                        c["civitai"] = nciv
+                        matched_n += 1
+                        thumbs = download_thumbs(nciv.get("images") or [], f"thumbs/{sha[:16]}", out_dir)
+                        if thumbs:
+                            c["thumbs"] = thumbs
+                            c["thumb"] = thumbs[0]
+                        retry_ok += 1
+                        time.sleep(REQUEST_DELAY)
+                        continue
+                # 哈希失败 → 名字兜底（含 NSFW 搜索 + 全版本哈希验证）
+                if not name_done:
+                    c["name_tried"] = True
+                    ok2, nciv2, guess = search_civitai_by_name(os.path.basename(rel), sha)
+                    if ok2 and nciv2:
+                        c["civitai"] = nciv2
+                        matched_n += 1
+                        thumbs = download_thumbs(nciv2.get("images") or [], f"thumbs/{sha[:16]}", out_dir)
+                        if thumbs:
+                            c["thumbs"] = thumbs
+                            c["thumb"] = thumbs[0]
+                        retry_name += 1
+                    elif guess:
+                        c["guess"] = guess
+                        guess_n += 1
+                    time.sleep(REQUEST_DELAY)
+        if up_imgs or retry_ok or retry_name or guess_n:
+            log(f"增量升级：示例图补齐 {up_imgs} 个，哈希重试命中 {retry_ok} 个，"
+                f"名字兜底命中 {retry_name} 个，疑似匹配 {guess_n} 个")
 
     # 组装 records（含缓存命中的也要进图鉴）；视频模型 LoRA 不进图鉴
     records = []
@@ -1389,7 +1552,7 @@ def main():
                    "size": c.get("size", 0), "mtime": c.get("mtime", 0),
                    "civitai": c.get("civitai"), "local": c.get("local", {}),
                    "thumb": c.get("thumb"), "thumbs": c.get("thumbs") or [],
-                   "thumb_remote": c.get("thumb_remote")}
+                   "thumb_remote": c.get("thumb_remote"), "guess": c.get("guess")}
             # 修正旧缓存里扩展名错误的缩略图路径
             fixed = fix_thumb_path(rec["thumb"], out_dir)
             if fixed != rec["thumb"]:
