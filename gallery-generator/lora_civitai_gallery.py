@@ -192,6 +192,33 @@ def extract_local_hints(meta):
                "ss_network_module", "ss_output_name"):
         if meta.get(key) not in (None, "", "None"):
             hints[key] = str(meta[key])
+    # 本地触发词：ss_trigger_words / ss_tag_frequency 里出现频率最高的词
+    tw = ""
+    for key in ("ss_trigger_words", "trigger_words", "trained_words"):
+        v = meta.get(key)
+        if isinstance(v, str) and v.strip():
+            tw = v.strip()
+            break
+    if not tw:
+        tf = meta.get("ss_tag_frequency")
+        if isinstance(tf, str):
+            try:
+                tf = json.loads(tf)
+            except Exception:
+                tf = None
+        if isinstance(tf, dict) and tf:
+            # 取第一个数据集里词频前 3 的词
+            try:
+                words = []
+                for ds in tf.values():
+                    if isinstance(ds, dict):
+                        words += sorted(ds.items(), key=lambda kv: -kv[1])
+                        break
+                tw = ", ".join(w for w, _ in words[:3])
+            except Exception:
+                pass
+    if tw:
+        hints["trigger"] = tw[:200]
     sw = meta.get("software")
     if isinstance(sw, str):
         try:
@@ -928,11 +955,14 @@ def save_cache(path, loras):
 # ----------------------------------------------------------------------------
 CARD_TMPL = """
 <article class="card {matched}" data-name="{data_name}" data-base="{data_base}" data-cat="{data_cat}"
-         data-tags="{data_tags}" data-trig="{data_trig}" data-local="{data_local}">
+         data-tags="{data_tags}" data-trig="{data_trig}" data-local="{data_local}"
+         data-fname="{data_fname}" data-fsize="{data_fsize}" data-mtime="{data_mtime}"
+         data-bm="{data_bm}" data-bm-key="{data_bm_key}" data-bm-label="{data_bm_label}">
   <div class="thumb">
     {thumb_html}
     <span class="badge base">{base_dir}</span>
     {status_badge}
+    <button class="favstar" title="收藏" onclick="toggleFav(this.closest('.card').dataset.fname,event)">☆</button>
   </div>
   <div class="body">
     <h3 class="fname" title="{fname}">{fname}</h3>
@@ -945,13 +975,71 @@ CARD_TMPL = """
     {tags_html}
     {desc_html}
     {local_html}
+    <div class="annbox" data-ann></div>
     <div class="links">
       {link_html}
+      <button class="annbtn" onclick="openAnn(this.closest('.card').dataset.fname)">✎ 标注</button>
       <span class="size">{size_human}</span>
     </div>
   </div>
 </article>
 """
+
+
+# ----------------------------------------------------------------------------
+# 基座归一化（购物车基座锁定用：同基座才能组配方，防导出无效工作流）
+# ----------------------------------------------------------------------------
+BASE_MAP = {
+    "zimage": ("zimage", "Z-Image Turbo"),
+    "illustrious": ("illustrious", "Illustrious XL"),
+    "krea2": ("krea2", "Krea2 Turbo"),
+    "sdxl": ("sdxl", "SDXL 1.0"),
+    "pony": ("pony", "Pony XL"),
+    "flux1": ("flux1", "Flux.1"),
+    "noobai": ("", "NoobAI XL（暂不支持导出）"),
+    "anima": ("anima", "Anima"),
+    "wan": ("", "Wan（视频模型）"),
+    "other": ("", "未知基座"),
+}
+
+
+def normalize_base(raw):
+    """把 Civitai baseModel / 本地子目录名 归一成规范 key。"""
+    if not raw:
+        return "other"
+    s = str(raw).lower()
+    if "zimage" in s or "z-image" in s or s == "z" or "zimagebase" in s:
+        return "zimage"
+    if "illustrious" in s or s == "il" or "ilux" in s:
+        return "illustrious"
+    if "krea" in s:
+        return "krea2"
+    if "sdxl" in s or "sd xl" in s or s == "sd15" or "sd1.5" in s:
+        return "sdxl"
+    if "pony" in s:
+        return "pony"
+    if "flux" in s or "klein" in s:
+        return "flux1"
+    if "noob" in s:
+        return "noobai"
+    if "anima" in s:
+        return "anima"
+    if "wan" in s:
+        return "wan"
+    return "other"
+
+
+def detect_base(rec):
+    """返回 (canonical_key, export_key, label)。export_key 为空表示不支持导出。"""
+    civ = rec.get("civitai")
+    raw = ""
+    if civ:
+        raw = civ.get("base_model") or (civ.get("base_models") or [""])[0]
+    else:
+        raw = rec.get("base_model_dir") or ""
+    key = normalize_base(raw)
+    exp_key, label = BASE_MAP.get(key, BASE_MAP["other"])
+    return key, exp_key, label
 
 
 def human_size(n):
@@ -960,6 +1048,210 @@ def human_size(n):
             return f"{n:.0f}{unit}"
         n /= 1024
     return f"{n:.1f}TB"
+
+
+# ----------------------------------------------------------------------------
+# 内置前端功能：标注库（评分/收藏/备注/附加标签）+ 排序/收藏筛选/暗色/列表视图。
+# 内置进生成主流程（历史教训：事后注入会在重建时丢失）。
+# 标注读写：GET annotations.json（服务端静态文件）/ POST /api/annotate。
+# ----------------------------------------------------------------------------
+ANN_MODAL = """
+<div class="ann-mask" id="annMask" onclick="if(event.target===this)closeAnn()">
+  <div class="ann-modal">
+    <h3 id="annFname"></h3>
+    <div class="row">
+      <div><label>作用分类</label><select id="annCat"><option value="">（自动）</option></select></div>
+      <div><label>推荐强度</label><select id="annStr"><option value="">（默认）</option><option>0.5</option><option>0.6</option><option>0.7</option><option>0.8</option><option>0.9</option><option>1.0</option><option>1.2</option></select></div>
+      <div><label>评分</label><select id="annRating"><option value="0">未评</option><option value="1">★</option><option value="2">★★</option><option value="3">★★★</option><option value="4">★★★★</option><option value="5">★★★★★</option></select></div>
+    </div>
+    <label><input type="checkbox" id="annFav"> 收藏（⭐）</label>
+    <label>附加标签（逗号分隔，配方实验会拼进提示词）</label>
+    <input type="text" id="annTags" placeholder="如：侧逆光, 胶片颗粒">
+    <label>备注</label>
+    <textarea id="annNote" placeholder="出图心得、踩坑记录…"></textarea>
+    <div class="foot">
+      <button class="del" onclick="delAnn()">删除</button>
+      <button class="cancel" onclick="closeAnn()">取消</button>
+      <button class="save" onclick="saveAnn()">保存</button>
+    </div>
+  </div>
+</div>
+"""
+
+EXTRA_JS = """
+/* ===== 标注库 + 收藏 + 排序 + 暗色/列表视图（内置，重建不丢） ===== */
+var ANN = {};
+var favOnly = false;
+var GAL_FILE_MODE = location.protocol === 'file:';
+var annCur = null;
+
+function annNatcmp(a, b) {
+  a = String(a || '').toLowerCase(); b = String(b || '').toLowerCase();
+  var ax = a.match(/(\\d+)|(\\D+)/g) || [], bx = b.match(/(\\d+)|(\\D+)/g) || [];
+  for (var i = 0; i < Math.max(ax.length, bx.length); i++) {
+    var x = ax[i] || '', y = bx[i] || '';
+    var xn = /^\\d/.test(x), yn = /^\\d/.test(y);
+    if (xn && yn) { var d = parseInt(x, 10) - parseInt(y, 10); if (d) return d; }
+    else if (xn !== yn) return xn ? -1 : 1;
+    else if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
+}
+function annEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function annCssEsc(s) { return (window.CSS && CSS.escape) ? CSS.escape(s) : String(s).replace(/["\\\\]/g, '\\\\$&'); }
+
+function loadAnn() {
+  if (GAL_FILE_MODE) return Promise.resolve();
+  return fetch('annotations.json?_=' + Date.now())
+    .then(function (r) { return r.ok ? r.json() : {}; })
+    .then(function (d) {
+      ANN = d || {};
+      document.querySelectorAll('.card').forEach(function (c) { applyAnnUI(c.dataset.fname); });
+    })
+    .catch(function () {});
+}
+function annOf(f) { return ANN[f] || null; }
+
+function applyAnnUI(f) {
+  var card = document.querySelector('.card[data-fname="' + annCssEsc(f) + '"]');
+  if (!card) return;
+  var a = annOf(f);
+  var star = card.querySelector('.favstar');
+  if (star) {
+    var on = !!(a && a.favorite);
+    star.textContent = on ? '★' : '☆';
+    star.classList.toggle('on', on);
+    star.title = on ? '取消收藏' : '收藏';
+  }
+  var box = card.querySelector('.annbox');
+  if (!box) return;
+  if (!a || (!a.rating && !a.note && !(a.extra_tags || []).length && !a.strength)) { box.innerHTML = ''; return; }
+  var html = '';
+  if (a.rating) html += '<span class="stars">' + '★'.repeat(a.rating) + '☆'.repeat(5 - a.rating) + '</span> ';
+  if (a.strength) html += '<span style="color:var(--sub)">强度 ' + annEsc(a.strength) + '</span> ';
+  if ((a.extra_tags || []).length)
+    html += '<div class="xtags">' + a.extra_tags.map(function (t) { return '<span>' + annEsc(t) + '</span>'; }).join('') + '</div>';
+  if (a.note) html += '<div class="note">' + annEsc(a.note) + '</div>';
+  box.innerHTML = html;
+}
+
+function toggleFav(f, ev) {
+  if (ev) ev.stopPropagation();
+  if (GAL_FILE_MODE) { alert('file:// 直开无法保存标注，请用 启动图鉴.bat / python start.py 打开。'); return; }
+  fetch('/api/annotate', { method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ fname: f, _toggle_fav: true }) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.ok) {
+        var a = ANN[f] || { category: '', strength: '', rating: 0, extra_tags: [], note: '' };
+        a.favorite = d.favorite; ANN[f] = a;
+        applyAnnUI(f);
+        if (favOnly) filter();
+        if (document.getElementById('sortSel').value !== 'name') applySort();
+      }
+    })
+    .catch(function (e) { alert('保存失败：' + e); });
+}
+
+function openAnn(f) {
+  annCur = f;
+  var a = annOf(f) || { category: '', strength: '', rating: 0, favorite: false, extra_tags: [], note: '' };
+  document.getElementById('annFname').textContent = f;
+  document.getElementById('annCat').value = a.category || '';
+  document.getElementById('annStr').value = a.strength || '';
+  document.getElementById('annRating').value = String(a.rating || 0);
+  document.getElementById('annFav').checked = !!(a.favorite);
+  document.getElementById('annTags').value = (a.extra_tags || []).join(', ');
+  document.getElementById('annNote').value = a.note || '';
+  document.getElementById('annMask').classList.add('show');
+}
+function closeAnn() { document.getElementById('annMask').classList.remove('show'); }
+function saveAnn() {
+  if (!annCur) return;
+  var payload = {
+    fname: annCur,
+    category: document.getElementById('annCat').value,
+    strength: document.getElementById('annStr').value,
+    rating: parseInt(document.getElementById('annRating').value, 10) || 0,
+    favorite: document.getElementById('annFav').checked,
+    extra_tags: document.getElementById('annTags').value.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean),
+    note: document.getElementById('annNote').value
+  };
+  fetch('/api/annotate', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.ok) {
+        ANN[annCur] = payload; applyAnnUI(annCur); closeAnn();
+        if (favOnly) filter();
+        if (document.getElementById('sortSel').value !== 'name') applySort();
+      } else alert('保存失败：' + (d.error || '未知错误'));
+    })
+    .catch(function (e) { alert('保存失败：' + e); });
+}
+function delAnn() {
+  if (!annCur) return;
+  if (!confirm('删除 ' + annCur + ' 的标注？')) return;
+  fetch('/api/annotate', { method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ fname: annCur, _delete: true }) })
+    .then(function () { delete ANN[annCur]; applyAnnUI(annCur); closeAnn(); if (favOnly) filter(); });
+}
+function buildAnnCatOptions() {
+  var sel = document.getElementById('annCat');
+  document.querySelectorAll('.chip.cat').forEach(function (ch) {
+    var v = ch.getAttribute('data-cat');
+    if (!v) return;
+    var o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o);
+  });
+}
+
+function toggleFavFilter(btn) {
+  favOnly = !favOnly;
+  btn.classList.toggle('on', favOnly);
+  filter();
+}
+function applySort() {
+  var mode = document.getElementById('sortSel').value;
+  var grid = document.getElementById('grid');
+  var cards = Array.prototype.slice.call(grid.querySelectorAll('.card'));
+  var rsum = function (c) { var a = ANN[c.dataset.fname]; return (a && a.rating) || 0; };
+  var favn = function (c) { var a = ANN[c.dataset.fname]; return (a && a.favorite) ? 1 : 0; };
+  cards.sort(function (x, y) {
+    if (mode === 'rating') return rsum(y) - rsum(x) || annNatcmp(x.dataset.name, y.dataset.name);
+    if (mode === 'fav') return favn(y) - favn(x) || annNatcmp(x.dataset.name, y.dataset.name);
+    if (mode === 'size') return (parseInt(y.dataset.fsize, 10) || 0) - (parseInt(x.dataset.fsize, 10) || 0);
+    if (mode === 'date') return (parseInt(y.dataset.mtime, 10) || 0) - (parseInt(x.dataset.mtime, 10) || 0);
+    return annNatcmp(x.dataset.name, y.dataset.name);
+  });
+  cards.forEach(function (c) { grid.appendChild(c); });
+}
+function toggleTheme() {
+  var dark = document.body.classList.toggle('dark');
+  try { localStorage.setItem('gal_theme', dark ? 'dark' : 'light'); } catch (e) {}
+  var b = document.getElementById('themeBtn');
+  if (b) b.textContent = dark ? '☀️ 亮色' : '🌙 暗色';
+}
+function toggleView() {
+  var list = document.getElementById('grid').classList.toggle('listview');
+  try { localStorage.setItem('gal_view', list ? 'list' : 'grid'); } catch (e) {}
+  var b = document.getElementById('viewBtn');
+  if (b) b.textContent = list ? '▦ 网格' : '☰ 列表';
+}
+(function initGalleryUI() {
+  try {
+    if (localStorage.getItem('gal_theme') === 'dark') {
+      document.body.classList.add('dark');
+      var t = document.getElementById('themeBtn'); if (t) t.textContent = '☀️ 亮色';
+    }
+    if (localStorage.getItem('gal_view') === 'list') {
+      document.getElementById('grid').classList.add('listview');
+      var v = document.getElementById('viewBtn'); if (v) v.textContent = '▦ 网格';
+    }
+  } catch (e) {}
+  buildAnnCatOptions();
+  loadAnn();
+})();
+"""
 
 
 def find_local_preview(previews_dir, fname):
@@ -988,7 +1280,8 @@ def render_card(rec, out_dir):
     data_name = esc((civ.get("model_name") if civ else "") + " " + fname)
     data_base = esc(base_dir)
     data_tags = esc(" ".join(civ.get("tags", [])) if civ else "")
-    data_trig = esc(" ".join(civ.get("trained_words", [])) if civ else "")
+    data_trig = esc(" ".join(civ.get("trained_words", [])) if civ
+                    else (rec.get("local") or {}).get("trigger", ""))
     data_local = esc(" ".join(rec.get("local", {}).get("top_tags", [])))
 
     # 作用归类 + 一句话总结 + 推荐强度
@@ -996,6 +1289,8 @@ def render_card(rec, out_dir):
     data_cat = esc(cat)
     summary_html = (f'<div class="sumline"><span class="cat-badge cat-{CAT_CLASS.get(cat, "unknown")}">{esc(cat)}</span>'
                    f'<span class="sumtext">{esc(summary)}</span></div>')
+    # 基座归一化（购物车基座锁定）
+    _bm_canon, _bm_key, _bm_label = detect_base(rec)
 
     # 缩略图：匹配 → 最多 MAX_CARD_IMAGES 张（1 主图 + 侧列小图）；
     # 未匹配 → 回退 previews/ 下的本地生成预览图
@@ -1056,6 +1351,10 @@ def render_card(rec, out_dir):
     if matched and civ.get("trained_words"):
         pills = " ".join(f"<code>{esc(t)}</code>" for t in civ["trained_words"][:8])
         trig_html = f'<div class="trig">触发词：{pills}</div>'
+    elif not matched and (rec.get("local") or {}).get("trigger"):
+        pills = " ".join(f"<code>{esc(t)}</code>" for t in re.split(r"[,，]", rec["local"]["trigger"])[:5] if t.strip())
+        if pills:
+            trig_html = f'<div class="trig">本地触发词：{pills}</div>'
 
     tags_html = ""
     if matched and civ.get("tags"):
@@ -1113,6 +1412,8 @@ def render_card(rec, out_dir):
         fname=esc(fname), civitai_name_html=civitai_name_html, meta_html=meta_html,
         trig_html=trig_html, tags_html=tags_html, desc_html=desc_html,
         local_html=local_html, link_html=link_html, size_human=human_size(rec.get("size", 0)),
+        data_fname=esc(fname), data_fsize=rec.get("size", 0), data_mtime=rec.get("mtime", 0),
+        data_bm=_bm_canon, data_bm_key=_bm_key, data_bm_label=esc(_bm_label),
     )
 
 
@@ -1289,6 +1590,8 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
 })();
 </script>
 """
+    extra_js = EXTRA_JS
+    ann_modal = ANN_MODAL
 
     html_doc = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1302,6 +1605,16 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
     --accent:#6d5efc; --accent2:#0ea5e9; --ok:#16a34a; --warn:#d97706; --pill:#eef2ff; --local:#fef3c7;
   }}
   * {{ box-sizing:border-box; }}
+  /* 暗色模式：body.dark 覆盖变量 */
+  body.dark {{
+    --bg:#101418; --card:#1a2027; --ink:#e5e9ef; --sub:#9aa4b2; --line:#2a323c;
+    --pill:#232c38; --local:#3a3021;
+  }}
+  body.dark header {{ background:linear-gradient(120deg,#3d38a0,#0a6e96); }}
+  body.dark .chip {{ background:#1a2027; }}
+  body.dark .thumb {{ background:#20262e; }}
+  body.dark .trig code {{ background:#232c38; color:#cdd6e0; }}
+  body.dark .nothumb {{ background:#20262e; }}
   body {{ margin:0; background:var(--bg); color:var(--ink);
     font-family:-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif; }}
   header {{ padding:20px 24px 14px; background:linear-gradient(120deg,#6d5efc,#0ea5e9); color:#fff; }}
@@ -1320,6 +1633,49 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
   .chip.all.active {{ background:var(--accent2); border-color:var(--accent2); }}
   main {{ padding:18px 24px 60px; display:grid; gap:16px;
     grid-template-columns:repeat(auto-fill,minmax(270px,1fr)); }}
+  /* 列表视图：卡片横向铺满 */
+  main.listview {{ grid-template-columns:1fr; }}
+  main.listview .card {{ display:grid; grid-template-columns:180px 1fr; }}
+  main.listview .thumb {{ aspect-ratio:auto; height:180px; }}
+  main.listview .mset {{ height:180px; }}
+  main.listview .cbody {{ padding:10px 14px 12px; }}
+  /* 工具栏（排序/收藏筛选/主题/视图） */
+  .tools {{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:2px; }}
+  .tools select, .tools button.tbtn {{ border:1px solid var(--line); background:var(--card); color:var(--ink);
+    padding:6px 11px; border-radius:8px; font-size:12.5px; cursor:pointer; }}
+  .tools select {{ font-family:inherit; }}
+  .tools button.tbtn.on {{ background:var(--accent); color:#fff; border-color:var(--accent); }}
+  /* 收藏星标与标注按钮 */
+  .favstar {{ position:absolute; top:6px; right:6px; z-index:5; width:30px; height:30px; border:none; border-radius:50%;
+    background:rgba(255,255,255,.88); color:#94a3b8; font-size:16px; cursor:pointer; line-height:1;
+    box-shadow:0 1px 3px rgba(0,0,0,.25); }}
+  .favstar.on {{ color:#f59e0b; }}
+  body.dark .favstar {{ background:rgba(20,26,34,.85); }}
+  .annbtn {{ border:1px solid var(--line); background:var(--card); color:var(--sub); font-size:11px;
+    padding:4px 9px; border-radius:7px; cursor:pointer; }}
+  .annbtn:hover {{ color:var(--accent); border-color:var(--accent); }}
+  .annbox {{ font-size:11.5px; margin-top:4px; }}
+  .annbox .stars {{ color:#f59e0b; letter-spacing:1px; }}
+  .annbox .note {{ color:var(--sub); margin-top:2px; }}
+  .annbox .xtags {{ margin-top:3px; }}
+  .annbox .xtags span {{ background:var(--local); border-radius:4px; padding:1px 6px; margin-right:4px; font-size:10.5px; }}
+  /* 标注弹窗 */
+  .ann-mask {{ position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:center; justify-content:center; z-index:100; }}
+  .ann-mask.show {{ display:flex; }}
+  .ann-modal {{ background:var(--card); color:var(--ink); border-radius:14px; padding:18px 20px; width:min(420px,92vw);
+    box-shadow:0 10px 40px rgba(0,0,0,.3); }}
+  .ann-modal h3 {{ margin:0 0 10px; font-size:15px; word-break:break-all; }}
+  .ann-modal label {{ display:block; font-size:12px; color:var(--sub); margin:9px 0 3px; }}
+  .ann-modal input[type=text], .ann-modal select, .ann-modal textarea {{ width:100%; border:1px solid var(--line);
+    background:var(--bg); color:var(--ink); border-radius:8px; padding:7px 10px; font-size:13px; font-family:inherit; }}
+  .ann-modal textarea {{ min-height:56px; resize:vertical; }}
+  .ann-modal .row {{ display:flex; gap:10px; }}
+  .ann-modal .row > div {{ flex:1; }}
+  .ann-modal .foot {{ display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }}
+  .ann-modal .foot button {{ border:none; border-radius:8px; padding:7px 15px; font-size:13px; cursor:pointer; }}
+  .ann-modal .foot .save {{ background:var(--accent); color:#fff; }}
+  .ann-modal .foot .del {{ background:transparent; color:#dc2626; margin-right:auto; }}
+  .ann-modal .foot .cancel {{ background:var(--line); color:var(--ink); }}
   .card {{ background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; display:flex; flex-direction:column;
     box-shadow:0 1px 2px rgba(0,0,0,.04); transition:transform .12s, box-shadow .12s; }}
   .card:hover {{ transform:translateY(-2px); box-shadow:0 6px 18px rgba(0,0,0,.10); }}
@@ -1407,6 +1763,18 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
     <button class="chip all active" data-cat="__all__" onclick="setCat('__all__',this)">全部作用</button>
     {cat_chips}
   </div>
+  <div class="tools">
+    <select id="sortSel" onchange="applySort()">
+      <option value="name">排序：名称</option>
+      <option value="rating">排序：评分 ↓</option>
+      <option value="fav">排序：收藏优先</option>
+      <option value="size">排序：文件大小 ↓</option>
+      <option value="date">排序：加入时间 ↓</option>
+    </select>
+    <button class="tbtn" id="favBtn" onclick="toggleFavFilter(this)">⭐ 只看收藏</button>
+    <button class="tbtn" id="themeBtn" onclick="toggleTheme()">🌙 暗色</button>
+    <button class="tbtn" id="viewBtn" onclick="toggleView()">☰ 列表</button>
+  </div>
 </div>
 {unmatched_html}
 <main id="grid">
@@ -1437,7 +1805,7 @@ function filter() {{
     const okCat = (curCat === '__all__') || c.dataset.cat === curCat;
     const hay = (c.dataset.name+' '+c.dataset.tags+' '+c.dataset.trig+' '+c.dataset.local+' '+c.dataset.cat).toLowerCase();
     const okQ = !q || hay.includes(q);
-    const vis = okBase && okCat && okQ;
+    const vis = okBase && okCat && okQ && (!favOnly || (ANN[c.dataset.fname]||{{}}).favorite === true);
     c.style.display = vis ? '' : 'none';
     if (vis) shown++;
   }});
@@ -1446,8 +1814,11 @@ function filter() {{
     if (!e) {{ e = document.createElement('div'); e.id='empty'; e.className='empty'; e.textContent='没有匹配的结果'; document.getElementById('grid').appendChild(e); }}
   }} else if (e) {{ e.remove(); }}
 }}
+{extra_js}
 </script>
 {uf_js}
+<footer>由 lora_civitai_gallery.py 生成 · 示例图版权归 Civitai 作者所有 · 点击卡片链接跳转原页</footer>
+{ann_modal}
 </body>
 </html>
 """
@@ -1470,7 +1841,10 @@ def _inject_cart(html_path):
     spec = importlib.util.spec_from_file_location("inject_cart", inj)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    mod.main()
+    try:
+        mod.main([])  # 显式空 argv，防止注入器的 argparse 吃到本进程参数
+    except TypeError:
+        mod.main()
 
 
 # ----------------------------------------------------------------------------
@@ -1539,6 +1913,14 @@ def main():
             rec["sha256"] = c.get("sha256")
             if rec["civitai"]:
                 matched_n += 1
+            elif not (rec["local"] or {}).get("trigger"):
+                # 老缓存缺本地触发词：重读一次文件头（只读 header，代价小）
+                meta = read_safetensors_meta(path)
+                hints = extract_local_hints(meta)
+                if hints.get("trigger"):
+                    hints.setdefault("top_tags", rec["local"].get("top_tags", []))
+                    rec["local"] = hints
+                    c["local"] = hints
             done += 1
             continue
 
