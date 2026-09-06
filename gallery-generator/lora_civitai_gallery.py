@@ -945,7 +945,8 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
     vid_note = (f'<div>已过滤视频模型 <b>{stats_summary.get("video", 0)}</b></div>'
                 if stats_summary.get("video") else "")
 
-    # 未匹配清单面板
+    # 未匹配清单面板（含本地预览图 + 可用的生成操作）
+    previews_dir = os.path.join(out_dir, "previews")
     unmatched_recs = [r for r in records if not r.get("civitai")]
     uf_items = []
     for r in unmatched_recs:
@@ -958,21 +959,104 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
         cat, _, _ = summarize(r)
         lt = r.get("local", {}).get("top_tags", [])
         tags_html = " ".join(f"<span class='pill local'>{esc(t)}</span>" for t in lt[:8]) if lt else ""
+        prev = find_local_preview(previews_dir, fname)
+        thumb_html = (f'<img class="uf-thumb" loading="lazy" src="{esc(prev)}" alt="">'
+                      if prev else '<span class="uf-thumb uf-empty">无图</span>')
         uf_items.append(
-            f'<li><label class="uf-item"><input type="checkbox">'
+            f'<li>'
+            f'<label class="uf-item"><input type="checkbox" class="uf-ck" data-fname="{esc(fname)}">'
+            f'{thumb_html}'
             f'<span class="uf-name">{esc(fname)}</span>'
             f'<span class="uf-sub">{esc(sub)}</span>'
             f'<span class="cat-badge cat-{CAT_CLASS.get(cat, "unknown")}">{esc(cat)}</span></label>'
             f'<div class="uf-actions"><a href="{esc(civ_url)}" target="_blank" rel="noopener">Civitai 搜</a>'
-            f'<a href="{esc(web_url)}" target="_blank" rel="noopener">网页搜</a></div>'
-            f'<div class="uf-tags">{tags_html}</div></li>'
+            f'<a href="{esc(web_url)}" target="_blank" rel="noopener">网页搜</a>'
+            f'<button type="button" class="uf-gen" data-fname="{esc(fname)}">生成预览图</button></div>'
+            f'<div class="uf-tags">{tags_html}</div>'
+            f'<div class="uf-note"></div></li>'
         )
     unmatched_html = ""
+    uf_js = ""
     if uf_items:
         unmatched_html = (
-            '<details class="uf-panel" open><summary>未匹配 LoRA 清单（{n} 个）· 可手动搜，或勾选后让我帮你查作用</summary>'
+            '<details class="uf-panel" open><summary>未匹配 LoRA 清单（{n} 个）· 勾选后点「生成预览图」调 ComfyUI 出图</summary>'
+            '<div class="uf-toolbar">'
+            '<label class="uf-item"><input type="checkbox" id="ufAll"> 全选</label>'
+            '<button type="button" id="ufGenBatch">⚡ 为勾选项生成预览图</button>'
+            '<span id="ufProgress"></span>'
+            '</div>'
             '<ul class="uf-list">{items}</ul></details>'
         ).format(n=len(uf_items), items="".join(uf_items))
+        uf_js = """
+<script>
+(function () {
+  var panel = document.querySelector('.uf-panel');
+  if (!panel) return;
+  var all = document.getElementById('ufAll');
+  var batch = document.getElementById('ufGenBatch');
+  var progress = document.getElementById('ufProgress');
+
+  function genOne(fname, note, btn) {
+    note.textContent = '⏳ 提交 ComfyUI 生成中…（单图约 10-60 秒）';
+    if (btn) { btn.disabled = true; }
+    return fetch('/api/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fname: fname })
+    }).then(function (r) { return r.json(); }).then(function (j) {
+      if (j.ok) {
+        note.innerHTML = '✅ 已生成 <a href="/' + j.img + '" target="_blank">查看</a>（刷新后显示在卡片上）';
+        return true;
+      }
+      note.textContent = '❌ ' + (j.error || '生成失败');
+      return false;
+    }).catch(function () {
+      note.textContent = '❌ 请求失败：请通过 start.py/启动图鉴.bat 打开（file:// 直开无后端）';
+      return false;
+    }).then(function (ok) {
+      if (btn) { btn.disabled = false; }
+      return ok;
+    });
+  }
+
+  all.addEventListener('change', function () {
+    panel.querySelectorAll('.uf-ck').forEach(function (ck) { ck.checked = all.checked; });
+  });
+
+  batch.addEventListener('click', function () {
+    var boxes = Array.prototype.filter.call(
+      panel.querySelectorAll('.uf-ck'), function (ck) { return ck.checked; });
+    if (!boxes.length) { progress.textContent = '请先勾选要生成的 LoRA'; return; }
+    if (!confirm('为选中的 ' + boxes.length + ' 个 LoRA 逐张生成预览图？将依次排队出图。')) return;
+    batch.disabled = true;
+    var done = 0, okN = 0;
+    boxes.forEach(function (ck) {
+      var li = ck.closest('li');
+      var note = li.querySelector('.uf-note');
+      var btn = li.querySelector('.uf-gen');
+      genOne(ck.getAttribute('data-fname'), note, btn).then(function (ok) {
+        done++; if (ok) okN++;
+        progress.textContent = '进度 ' + done + '/' + boxes.length + '（成功 ' + okN + '）';
+        if (done === boxes.length) {
+          batch.disabled = false;
+          if (okN > 0 && confirm('完成：成功 ' + okN + '/' + boxes.length + '。刷新页面以显示新预览图？')) {
+            location.reload();
+          }
+        }
+      });
+    });
+  });
+
+  panel.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('.uf-gen') : null;
+    if (!btn) return;
+    e.preventDefault();
+    var li = btn.closest('li');
+    genOne(btn.getAttribute('data-fname'), li.querySelector('.uf-note'), btn);
+  });
+})();
+</script>
+"""
 
     html_doc = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1058,6 +1142,13 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
   .uf-actions a {{ font-size:12px; color:var(--accent); text-decoration:none; }}
   .uf-actions a:hover {{ text-decoration:underline; }}
   .uf-tags {{ width:100%; display:flex; flex-wrap:wrap; gap:4px; margin-top:2px; }}
+  .uf-thumb {{ width:44px; height:58px; object-fit:cover; border-radius:6px; border:1px solid var(--line); background:#111; flex:0 0 auto; }}
+  .uf-empty {{ display:inline-flex; align-items:center; justify-content:center; font-size:10px; color:var(--sub); background:#f1f5f9; }}
+  .uf-toolbar {{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin:10px 0 2px; font-size:13px; }}
+  .uf-toolbar button, .uf-gen {{ background:var(--accent); color:#fff; border:none; border-radius:8px; padding:6px 12px; font-size:12px; cursor:pointer; }}
+  .uf-toolbar button:disabled, .uf-gen:disabled {{ opacity:.55; cursor:wait; }}
+  .uf-gen {{ background:#0ea5e9; padding:3px 9px; font-size:11px; }}
+  .uf-note {{ width:100%; font-size:11.5px; color:var(--sub); min-height:15px; }}
 </style>
 </head>
 <body>
@@ -1122,6 +1213,7 @@ function filter() {{
   }} else if (e) {{ e.remove(); }}
 }}
 </script>
+{uf_js}
 </body>
 </html>
 """
