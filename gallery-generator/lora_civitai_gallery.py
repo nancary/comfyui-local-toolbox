@@ -74,6 +74,9 @@ CIVITAI_BY_HASH = "https://civitai.com/api/v1/model-versions/by-hash/{sha}"
 CIVITAI_MODEL = "https://civitai.com/api/v1/models/{model_id}"
 # 名字兜底搜索：limit 控制结果数，nsfw=true 不漏掉 NSFW（红标）模型
 CIVITAI_SEARCH = "https://civitai.com/api/v1/models?query={q}&limit=8&nsfw=true"
+# HuggingFace 兜底：Civitai 上没有的（很多 LoRA 只发 HF）
+HF_SEARCH = "https://huggingface.co/api/models?search={q}&limit=10"
+HF_TREE = "https://huggingface.co/api/models/{repo}/tree/main"
 UA = "Mozilla/5.0 (compatible; LoraGallery/1.0)"
 REQUEST_DELAY = 0.12          # 两次联网之间的礼貌间隔
 READ_TIMEOUT = 25
@@ -659,11 +662,12 @@ def _name_similarity(model_name, fname):
     return (len(a & b) / len(a)) * 0.8 if a else 0.0
 
 
-def search_civitai_by_name(fname, sha):
+def search_civitai_by_name(fname, sha, fsize=None):
     """哈希反查失败后的名字兜底（含 NSFW）。
     返回 (matched, civ_or_None, guess_or_None)：
     - 候选模型任一版本的文件 SHA256 与本地一致 → 完全匹配，构建完整 civ
-    - 名字高度相似但没有哈希对上 → 返回 guess（疑似匹配，供面板给链接人工确认）
+    - 哈希对不上但某版本文件大小与本地一致（±3%）→ 视为同一文件，确认匹配
+    - 名字高度相似但没有上述命中 → 返回 guess（疑似匹配，供面板给链接人工确认）
     """
     q = _clean_search_name(fname)
     if len(q) < 3:
@@ -695,15 +699,23 @@ def search_civitai_by_name(fname, sha):
     inter = {t for t in (mtok & ftok) if t not in generic}
     if not any(len(t) >= 4 for t in inter):
         return False, None, None  # 只撞上 z/image 等泛词的一律不算疑似
-    # 哈希验证：作者更新过文件时，老版本哈希也能对上
+    # 哈希验证：作者更新过文件时，老版本哈希也能对上；
+    # 哈希对不上时用文件大小兜底确认（训练输出/重打包文件哈希必然不同，但大小一致）
     matched_ver = None
+    size_ver = None
+    tol = max(2 * 1024 * 1024, 0.03 * fsize) if fsize else 0
     for v in m.get("modelVersions") or []:
         for f in v.get("files") or []:
-            if ((f.get("hashes") or {}).get("SHA256") or "").lower() == (sha or "").lower():
+            if sha and ((f.get("hashes") or {}).get("SHA256") or "").lower() == sha.lower():
                 matched_ver = v
                 break
+            kb = f.get("sizeKB")
+            if fsize and kb and abs(kb * 1024 - fsize) <= tol:
+                size_ver = size_ver or v
         if matched_ver:
             break
+    if not matched_ver and size_ver:
+        matched_ver = size_ver
     guess = {"model_id": m.get("id"), "name": m.get("name"),
              "score": round(score, 2), "verified": bool(matched_ver)}
     if not matched_ver:
@@ -743,6 +755,53 @@ def search_civitai_by_name(fname, sha):
             except Exception:
                 pass
     return True, civ, None
+
+
+def search_huggingface(fname, fsize=None):
+    """Civitai 全部失败的 HuggingFace 兜底。
+    返回 (matched, hf_or_None)：
+    - 候选仓库里有 .safetensors 文件大小与本地一致（±3%）→ 确认匹配
+    - 名字相似但大小对不上 → 返回疑似仓库链接（供人工确认）
+    """
+    q = _clean_search_name(fname)
+    if len(q) < 3:
+        return False, None
+    st, body = http_get(HF_SEARCH.format(q=urllib.parse.quote(q)))
+    if st != 200 or not body:
+        return False, None
+    try:
+        items = json.loads(body)
+    except Exception:
+        return False, None
+    fname_base = re.sub(r"\.safetensors$", "", fname, flags=re.I)
+    cands = []
+    for it in items if isinstance(items, list) else []:
+        repo = it.get("repoId") or it.get("id") or ""
+        if repo:
+            cands.append(repo)
+    # 按名字相似度排序，只看前 5 个仓库的文件树
+    cands.sort(key=lambda r: -_name_similarity(r.split("/")[-1], fname_base))
+    tol = max(2 * 1024 * 1024, 0.03 * fsize) if fsize else 0
+    for repo in cands[:5]:
+        st, tb = http_get(HF_TREE.format(repo=urllib.parse.quote(repo, safe="")))
+        if st != 200 or not tb:
+            continue
+        try:
+            tree = json.loads(tb)
+        except Exception:
+            continue
+        for f in tree if isinstance(tree, list) else []:
+            p = f.get("path") or ""
+            if not p.lower().endswith(".safetensors"):
+                continue
+            sz = (f.get("lfs") or {}).get("size") or f.get("size") or 0
+            if fsize and sz and abs(sz - fsize) <= tol:
+                return True, {"repo": repo, "file": p, "size": sz, "via": "huggingface",
+                              "url": f"https://huggingface.co/{repo}/blob/main/{urllib.parse.quote(p)}"}
+    if cands:
+        return False, {"repo": cands[0], "file": "", "size": 0, "via": "huggingface-guess",
+                       "url": f"https://huggingface.co/{cands[0]}"}
+    return False, None
 
 
 def _guess_image_ext(data):
@@ -940,8 +999,8 @@ def render_card(rec, out_dir):
             thumb_html = f'<img loading="lazy" src="{esc(remote)}" alt="{esc(fname)}" referrerpolicy="no-referrer">'
         else:
             thumb_html = '<div class="nothumb">无示例图</div>'
-        if (civ.get("nsfw_level") or 0) not in (0, None):
-            status_badge = '<span class="badge nsfw">NSFW</span>'
+        # 注意：Civitai 的 nsfwLevel 是位掩码标记（1/3/7/60 散布，非成人分级），
+        # 2026-09-05 已确认「非 0 即标 NSFW」是误报，永久移除徽章显示。
     else:
         prev = find_local_preview(os.path.join(out_dir, "previews"), fname)
         if prev:
@@ -1010,6 +1069,10 @@ def render_card(rec, out_dir):
     if matched:
         url = f"https://civitai.com/models/{civ.get('model_id')}"
         link_html = f'<a class="btn" href="{esc(url)}" target="_blank" rel="noopener">在 Civitai 打开</a>'
+    elif (rec.get("hf") or {}).get("file"):
+        hf = rec["hf"]
+        link_html = (f'<a class="btn" style="background:#0284c7" href="{esc(hf["url"])}" target="_blank" '
+                     f'rel="noopener">在 HuggingFace 打开（已按大小确认）</a>')
     else:
         guess = rec.get("guess") or {}
         if guess.get("model_id"):
@@ -1017,6 +1080,10 @@ def render_card(rec, out_dir):
             mark = "疑似匹配"
             link_html = (f'<a class="btn" style="background:#d97706" href="{esc(gurl)}" target="_blank" '
                          f'rel="noopener">{mark}：{esc(guess.get("name", ""))}</a>')
+        elif (rec.get("hf_guess") or {}).get("repo"):
+            hg = rec["hf_guess"]
+            link_html = (f'<a class="btn" style="background:#d97706" href="{esc(hg["url"])}" target="_blank" '
+                         f'rel="noopener">HF 疑似：{esc(hg["repo"].split("/")[-1])}</a>')
 
     return CARD_TMPL.format(
         matched="matched" if matched else "unmatched",
@@ -1071,7 +1138,8 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
 
     # 未匹配清单面板（含本地预览图 + 可用的生成操作）
     previews_dir = os.path.join(out_dir, "previews")
-    unmatched_recs = [r for r in records if not r.get("civitai")]
+    unmatched_recs = [r for r in records
+                      if not r.get("civitai") and not (r.get("hf") or {}).get("file")]
     uf_items = []
     n_hidden_preview = 0
     for r in unmatched_recs:
@@ -1085,6 +1153,7 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
             continue
         q = urllib.parse.quote(re.sub(r"\.safetensors$", "", fname))
         civ_url = f"https://civitai.com/search/models?q={q}"
+        hf_url = f"https://huggingface.co/models?search={q}"
         web_url = f"https://www.google.com/search?q={urllib.parse.quote(fname + ' lora civitai')}"
         cat, _, _ = summarize(r)
         lt = r.get("local", {}).get("top_tags", [])
@@ -1096,6 +1165,10 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
             mark = "✅已验" if guess.get("verified") else "疑似"
             guess_html = (f'<a class="uf-guess" href="{esc(gurl)}" target="_blank" rel="noopener">'
                           f'{mark}：{esc(guess.get("name", ""))}</a>')
+        hfg = r.get("hf_guess") or {}
+        if not guess_html and hfg.get("repo"):
+            guess_html = (f'<a class="uf-guess" href="{esc(hfg["url"])}" target="_blank" rel="noopener">'
+                          f'HF 疑似：{esc(hfg["repo"].split("/")[-1])}</a>')
         thumb_html = (f'<img class="uf-thumb" loading="lazy" src="{esc(prev)}" alt="">'
                       if prev else '<span class="uf-thumb uf-empty">无图</span>')
         uf_items.append(
@@ -1106,6 +1179,7 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
             f'<span class="uf-sub">{esc(sub)}</span>'
             f'<span class="cat-badge cat-{CAT_CLASS.get(cat, "unknown")}">{esc(cat)}</span></label>'
             f'<div class="uf-actions"><a href="{esc(civ_url)}" target="_blank" rel="noopener">Civitai 搜</a>'
+            f'<a href="{esc(hf_url)}" target="_blank" rel="noopener">HF 搜</a>'
             f'<a href="{esc(web_url)}" target="_blank" rel="noopener">网页搜</a>'
             f'{guess_html}'
             f'<button type="button" class="uf-gen" data-fname="{esc(fname)}">生成预览图</button></div>'
@@ -1359,6 +1433,24 @@ function filter() {{
 """
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html_doc)
+    # 内置注入购物车（out_dir 同目录有 inject_cart.py 就自动注入，重建不再丢失）
+    try:
+        _inject_cart(out_path)
+    except Exception as e:
+        log(f"购物车注入跳过（不影响图鉴）：{e}")
+
+
+def _inject_cart(html_path):
+    """调用 out_dir 同目录的 inject_cart.py 注入「购物车 → 工作流导出」功能。
+    inject_cart 幂等（已注入会跳过），没有该文件（如开源精简版）则静默跳过。"""
+    inj = os.path.join(os.path.dirname(os.path.abspath(html_path)), "inject_cart.py")
+    if not os.path.exists(inj):
+        return
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("inject_cart", inj)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.main()
 
 
 # ----------------------------------------------------------------------------
@@ -1475,7 +1567,7 @@ def main():
     # 未匹配的用缓存 SHA 重新反查，哈希仍失败再走名字兜底搜索（含 NSFW，各只试一次）
     if not args.dry_run and not args.no_thumbs:
         now = int(time.time())
-        up_imgs = retry_ok = retry_name = guess_n = 0
+        up_imgs = retry_ok = retry_name = guess_n = hf_n = 0
         for rel, c in cache.items():
             civ = c.get("civitai")
             sha = c.get("sha256")
@@ -1517,10 +1609,10 @@ def main():
                         retry_ok += 1
                         time.sleep(REQUEST_DELAY)
                         continue
-                # 哈希失败 → 名字兜底（含 NSFW 搜索 + 全版本哈希验证）
+                # 哈希失败 → 名字兜底（含 NSFW 搜索 + 全版本哈希/大小验证）
                 if not name_done:
                     c["name_tried"] = True
-                    ok2, nciv2, guess = search_civitai_by_name(os.path.basename(rel), sha)
+                    ok2, nciv2, guess = search_civitai_by_name(os.path.basename(rel), sha, fsize=c.get("size"))
                     if ok2 and nciv2:
                         c["civitai"] = nciv2
                         matched_n += 1
@@ -1532,10 +1624,20 @@ def main():
                     elif guess:
                         c["guess"] = guess
                         guess_n += 1
+                    else:
+                        # Civitai 一无所获 → HuggingFace 兜底（大小一致即确认匹配）
+                        c["hf_tried"] = True
+                        ok3, hf = search_huggingface(os.path.basename(rel), fsize=c.get("size"))
+                        if ok3 and hf:
+                            c["hf"] = hf
+                            hf_n += 1
+                        elif hf:
+                            c["hf_guess"] = hf
+                        time.sleep(REQUEST_DELAY)
                     time.sleep(REQUEST_DELAY)
-        if up_imgs or retry_ok or retry_name or guess_n:
+        if up_imgs or retry_ok or retry_name or guess_n or hf_n:
             log(f"增量升级：示例图补齐 {up_imgs} 个，哈希重试命中 {retry_ok} 个，"
-                f"名字兜底命中 {retry_name} 个，疑似匹配 {guess_n} 个")
+                f"名字兜底命中 {retry_name} 个，疑似匹配 {guess_n} 个，HuggingFace 命中 {hf_n} 个")
 
     # 组装 records（含缓存命中的也要进图鉴）；视频模型 LoRA 不进图鉴
     records = []
@@ -1552,7 +1654,8 @@ def main():
                    "size": c.get("size", 0), "mtime": c.get("mtime", 0),
                    "civitai": c.get("civitai"), "local": c.get("local", {}),
                    "thumb": c.get("thumb"), "thumbs": c.get("thumbs") or [],
-                   "thumb_remote": c.get("thumb_remote"), "guess": c.get("guess")}
+                   "thumb_remote": c.get("thumb_remote"), "guess": c.get("guess"),
+                   "hf": c.get("hf"), "hf_guess": c.get("hf_guess")}
             # 修正旧缓存里扩展名错误的缩略图路径
             fixed = fix_thumb_path(rec["thumb"], out_dir)
             if fixed != rec["thumb"]:
