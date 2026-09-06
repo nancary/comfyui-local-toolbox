@@ -1318,7 +1318,7 @@ def main():
     if not args.dry_run:
         save_cache(cache_path, cache)
         stats_summary = {"time": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                         "total": len(records), "video": skipped_video}
+                         "total": len(records), "video": skipped_early + skipped_video}
         build_html(records, html_path, out_dir, loras_dir, stats_summary)
         log(f"完成！共 {len(records)} 个，匹配 Civitai {matched_n} 个")
         log(f"图鉴：{html_path}")
