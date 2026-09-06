@@ -272,12 +272,14 @@ class Handler(BaseHTTPRequestHandler):
                 eta = None
                 st_ts = t.get("start_ts")
                 fin_ts = t.get("finished_ts")
+                pause = t.get("pause_ts", 0.0)
                 if st_ts:
                     if fin_ts:
-                        elapsed = fin_ts - st_ts
+                        elapsed = max(fin_ts - st_ts - pause, 0)
                         eta = 0.0
                     elif t["status"] in ("running", "paused"):
-                        elapsed = now - st_ts
+                        # 已用时间 = 启动至今 - 暂停累计（暂停期间冻结）
+                        elapsed = max(now - st_ts - pause, 0)
                         done = t["done"]
                         total = t["total"]
                         if done > 0 and total > done:
@@ -512,7 +514,7 @@ HTML_PAGE = """<!DOCTYPE html>
       </div>
     </div>
     <label>文件名称（可选，留空则只有日期+序列）</label>
-    <input type="text" id="namePrefix" placeholder="例如 myname —— 输出：myname_20260905_0001.png"/>
+    <input type="text" id="namePrefix" placeholder="例如 mysubject —— 输出：mysubject_20260905_0001.png"/>
     <div class="hint">留空时输出为 <code>20260905_0001.png</code>；填写后输出为 <code>名称_20260905_0001.png</code>（日期为当天、序列号自动递增）。</div>
 
     <label>ComfyUI 地址</label>
@@ -729,6 +731,8 @@ async function refresh(){
   document.getElementById('curStatus').className='q-status '+(current.status==='running'?'run':current.status==='done'?'done':current.status==='stopped'?'stop':current.status==='error'?'err':current.status==='paused'?'run':'');
   document.getElementById('pctText').textContent=pct+'%';
   document.getElementById('countText').textContent=`${current.done} / ${total} · 失败 ${current.failed}`;
+  document.getElementById('elapsedText').textContent='已用 '+(current.elapsed!=null?fmtDur(current.elapsed):'--:--');
+  document.getElementById('etaText').textContent='预计剩余 '+(current.eta!=null?fmtDur(current.eta):'--:--');
   document.getElementById('logBox').textContent=(current.log||[]).slice(-40).join('\\n');
 
   const thumb=document.getElementById('thumb');

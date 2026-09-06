@@ -1,4 +1,33 @@
-# LoRA Civitai Gallery
+# ComfyUI Local Toolbox
+
+Three standalone, **zero-dependency** (pure Python stdlib) local tools around a
+running ComfyUI — no `pip install`, no custom nodes, no data leaving your machine:
+
+| Tool | Folder | One-liner |
+|------|--------|-----------|
+| 🖼️ **LoRA Civitai Gallery** | [`gallery-generator/`](gallery-generator/) | Scan your local `loras/` dir, reverse-lookup each `.safetensors` on [Civitai](https://civitai.com) by **SHA256 hash**, and build a self-contained searchable HTML gallery — thumbnails, trigger words, training-tag word clouds, auto summaries. |
+| 🧱 **Inspiration Builder** | [`inspiration-builder/`](inspiration-builder/) | A unified local server + two in-browser builders: the **灵感积木** prompt composer (slot-based structure templates, curated CN/EN tag library, optional 3,000+ tag-supermarket import) and the **workflow builder** (pick LoRAs + base model → render straight through your ComfyUI). |
+| ⚡ **ComfyBatchTool** | [`batch-tool/`](batch-tool/) | Apply **one** workflow to **every image** in a folder — batch img2img / edit / upscale with live progress, ETA, pause/resume, and resume-from-checkpoint. CLI + Web UI. |
+
+## Repository layout
+
+```
+├── gallery-generator/        # LoRA gallery generator (lora_civitai_gallery.py)
+├── inspiration-builder/      # unified server + inspiration.html + workflow_builder.html
+│   └── templates/            # reference workflows per base model
+├── batch-tool/               # ComfyBatchTool (CLI + Web UI + start.bat)
+├── dev-scripts/              # gallery pipeline utilities (scan/restructure/preview/…)
+├── LICENSE                   # MIT
+└── README.md
+```
+
+All three tools run **fully local**. Generated artifacts (your gallery, tag
+library, experiment logs, batch outputs) are git-ignored — they reflect your
+personal model library and never get committed.
+
+---
+
+## 🖼️ LoRA Civitai Gallery
 
 Scan your local ComfyUI `loras/` directory, reverse-lookup each `.safetensors` on
 [Civitai](https://civitai.com) by its **SHA256 hash** (so it matches even if you renamed
@@ -10,8 +39,6 @@ workflow JSON.
 
 > Pure Python standard library + a single static HTML page — **no `pip install`
 > required**. Works on Windows / Linux / macOS.
-
-![Builder output](builder_e2e.png)
 
 ---
 
@@ -42,7 +69,7 @@ ComfyUI workflows in the browser and rendering them with one click.
 - **Browser workflow builder** — multi-select LoRAs (with per-LoRA strength sliders) + base-model picker + structured CN/EN prompt tool (110+ categorized terms + translate-current-prompt) + adjustable sampler/CFG/seed/size + **one-click render** that returns the image to the page.
 - **Inspiration Blocks (`inspiration.html`)** — a building-block prompt composer: ~90 curated tag blocks in 8 layers (subject / pose / outfit / scene / lighting / camera / style / quality), each with a Chinese description and "hot" markers for tags that reliably move the needle. Base-model profiles encode how each model actually wants prompts (Z-Image: plain 4-element natural language, dead negative; Illustrious: Danbooru tags + quality words + `(tag:1.2)` weighting; Pony: `score_9` auto-prefix; …). One-click style recipes (ancient-style, moody portrait, cinematic, dreamy, tomboy, gothic-sino, film-snapshot) load a full proven combo into the canvas. Stack optional LoRAs on top, hit run, and every attempt lands in a rated experiment log you can reload with one click. UI patterns follow the excellent [Danbooru/NovelAI 标签超市](https://github.com/wfjsw/danbooru-diffusion-prompt-builder).
 
-**Optional: import the 标签超市 tag library (3,000+ bilingual tags).** Run `python import_supermarket.py` (needs `pip install pyyaml`) in the serving directory — it downloads the tag-supermarket YAML library and converts it to `supermarket_tags.json`, which the page merges in as a "标签超市" source tab (43 categories: actions / clothes / hair / face / composition / style / flowers / sky / …). The generated JSON contains AGPL-licensed data and is git-ignored — keep it local.
+**Optional: import the 标签超市 tag library (3,000+ bilingual tags).** Run `python inspiration-builder/import_supermarket.py` (needs `pip install pyyaml`) in the serving directory — it downloads the tag-supermarket YAML library and converts it to `supermarket_tags.json`, which the page merges in as a "标签超市" source tab (43 categories: actions / clothes / hair / face / composition / style / flowers / sky / …). The generated JSON contains AGPL-licensed data and is git-ignored — keep it local.
 
 ## Privacy
 
@@ -81,26 +108,30 @@ pip install -e .
 
 ```bash
 # 1) Build the gallery (Civitai hash lookup + thumbnails + cache)
-python lora_civitai_gallery.py --loras-dir "/path/to/ComfyUI/models/loras"
+python gallery-generator/lora_civitai_gallery.py --loras-dir "/path/to/ComfyUI/models/loras"
 
 # 2) Read training tags from safetensors headers → drives the word cloud
-python scan_ss_tags.py --loras-dir "/path/to/ComfyUI/models/loras"
+python dev-scripts/scan_ss_tags.py --loras-dir "/path/to/ComfyUI/models/loras"
 
 # 3) Re-build gallery.html: promote the matched/unmatched cards,
 #    inject the word cloud, fix stale panel counts.
-python restructure_gallery.py
+python dev-scripts/restructure_gallery.py
 
 # 3b) Inject the 🛒 shopping-cart UI + "导出工作流文件" button
-python inject_cart.py
+python dev-scripts/inject_cart.py
 
 # 4) (Optional) Generate reference images for unmatched / local LoRAs
-python generate_lora_previews.py
+python dev-scripts/generate_lora_previews.py
 
 # 5) One command to serve everything (gallery + builder + APIs)
-python start.py
+python inspiration-builder/start.py
 # → opens http://127.0.0.1:8090/gallery.html automatically
-#   (or: python serve_builder.py --port 8090, then open /gallery.html)
+#   (or: python inspiration-builder/serve_builder.py --port 8090, then open /gallery.html)
 ```
+
+> Tip: generate the gallery **into** the `inspiration-builder/` folder
+> (`--out-dir inspiration-builder`) so the unified server can host both the
+> gallery and the builders from one directory.
 
 ### ASCII flow
 
@@ -135,7 +166,7 @@ python start.py
 
 ## Tool reference
 
-### `lora_civitai_gallery.py` — the main scanner
+### `gallery-generator/lora_civitai_gallery.py` — the main scanner
 
 ```bash
 python lora_civitai_gallery.py [--loras-dir PATH] [--out-dir PATH] [--limit N] [--no-thumbs] [--force] [--dry-run] [--version]
@@ -144,7 +175,7 @@ python lora_civitai_gallery.py [--loras-dir PATH] [--out-dir PATH] [--limit N] [
 - Walks `--loras-dir`, hashes every `.safetensors`, queries Civitai `by-hash`, downloads one thumbnail per match, renders `gallery.html.bak` (clean baseline for the restructure step). Results are cached in `lora_cache.json`; re-running is near-instant for unchanged files.
 - Sort key: full-table **filename** (case-insensitive) — no more "all Z files clumped at the top".
 
-### `scan_ss_tags.py` — training-tag word cloud
+### `dev-scripts/scan_ss_tags.py` — training-tag word cloud
 
 ```bash
 python scan_ss_tags.py [--loras-dir DIR] [--out tags.json] [--top 24]
@@ -152,7 +183,7 @@ python scan_ss_tags.py [--loras-dir DIR] [--out tags.json] [--top 24]
 
 Reads every safetensors header's `__metadata__.ss_tag_frequency` (the per-tag count the trainer saw during fine-tuning) and writes `tags.json` keyed by filename. ~88% of LoRAs in a typical collection have this metadata; the rest just don't get a word cloud.
 
-### `restructure_gallery.py` — turn the raw gallery into the final one
+### `dev-scripts/restructure_gallery.py` — turn the raw gallery into the final one
 
 Reads `gallery.html.bak` + `previews/previews.json` + `tags.json` and writes the final `gallery.html`:
 
@@ -166,7 +197,7 @@ Reads `gallery.html.bak` + `previews/previews.json` + `tags.json` and writes the
 python restructure_gallery.py   # runs from the lora_gallery/ output dir
 ```
 
-### `generate_lora_previews.py` — local ComfyUI preview batch
+### `dev-scripts/generate_lora_previews.py` — local ComfyUI preview batch
 
 For LoRAs in `unmatched.json`, render a reference image with the matching base model + that LoRA:
 
@@ -187,10 +218,10 @@ python generate_lora_previews.py --test "Z-刘亦菲.safetensors"   # one LoRA
 - Manifest cached in `previews/previews.json`; rerun is **resumable** (already-done entries are skipped). Delete an entry to force a redo.
 - One LoRA failure won't abort the batch.
 
-### `serve_builder.py` — local server + `POST /export`
+### `inspiration-builder/serve_builder.py` — local server + `POST /export`
 
 ```bash
-python serve_builder.py --port 8090
+python inspiration-builder/serve_builder.py --port 8090
 # open http://127.0.0.1:8090/  (workflow_builder.html)  or  lora_gallery/gallery.html (cart flow)
 ```
 
@@ -230,7 +261,7 @@ node dependencies, so the file runs on any stock ComfyUI installation.
 The exported file is **verified runnable** — converted back to API format it executes
 on ComfyUI (Z-Image + 2 LoRAs rendered in ~28 s during testing).
 
-### `workflow_builder.html` — in-browser builder page
+### `inspiration-builder/workflow_builder.html` — in-browser builder page
 
 - **Left** — base model (Z-Image / Illustrious / Krea2) + width/height/steps/CFG/seed/sampler/scheduler. Switching base model auto-fills sampler params **and filters the LoRA list to that base's folder** (`dirs` map: Z-Image←`Z-Image/`, Illustrious←`Illustrious/ + SDXL/ + Pony/`, Krea2←`Krea2/`; a "显示全部" toggle shows everything).
 - **Middle** — multi-select LoRAs with per-LoRA strength sliders; switching base model drops LoRAs that don't belong to it.
@@ -239,7 +270,7 @@ on ComfyUI (Z-Image + 2 LoRAs rendered in ~28 s during testing).
 
 To extend with another base model: add an entry in `BASE_MODELS` inside `workflow_builder.html` (with a `dirs` list) and a matching template in `make_templates.py` + a branch in `export_workflow.py`'s `BASE_META`.
 
-### `comfy_batch_tool.py` + `comfy_batch_runner.py` — batch folder runner
+### `batch-tool/comfy_batch_tool.py` + `comfy_batch_runner.py` — batch folder runner
 
 Take **one** ComfyUI API-format workflow and apply it to **every image** in a folder,
 sequentially — e.g. batch img2img / edit / upscale passes over a whole shoot.
@@ -250,12 +281,12 @@ sequentially — e.g. batch img2img / edit / upscale passes over a whole shoot.
 | `comfy_batch_tool.py` | **Web UI** (port **8091**, to avoid clashing with `serve_builder`'s 8090). Upload a `.json` workflow, auto-detect image-input nodes, watch a live progress bar, and pause / resume / stop. Output folder may be left blank — results stay in ComfyUI's `output` and are previewed via a proxy (no duplicate files on disk). |
 
 ```bash
-# CLI: batch-edit a folder with F2-k-editr.json
-python comfy_batch_runner.py --workflow F2-k-editr.json --input-folder "D:/图片/3" \
-    --output-folder "D:/批量结果/3_full" --seed-mode random --resume
+# CLI: batch-edit a folder with your workflow
+python batch-tool/comfy_batch_runner.py --workflow my_workflow.json --input-folder "D:/images/3" \
+    --output-folder "D:/batch_results/3_full" --seed-mode random --resume
 
-# Web UI: open http://127.0.0.1:8091/  (or double-click start_comfy_batch.bat)
-python comfy_batch_tool.py --port 8091
+# Web UI: open http://127.0.0.1:8091/  (or double-click batch-tool/start.bat)
+python batch-tool/comfy_batch_tool.py --port 8091
 ```
 
 - **Zero dependencies** — same stdlib-only rule as the rest of the repo.
@@ -350,12 +381,12 @@ img2img / 编辑 / 放大等整组照片的二传。
 | `comfy_batch_tool.py` | 网页版（端口 **8091**，避开 `serve_builder` 的 8090）。上传 `.json` 工作流 → 自动识别图片输入节点 → 看实时进度条 → 暂停/继续/结束。输出文件夹可留空，结果留在 ComfyUI 的 `output` 里，通过代理直接预览（不在本地重复存文件）。 |
 
 ```bash
-# 命令行：用 F2-k-editr.json 批量处理一个文件夹
-python comfy_batch_runner.py --workflow F2-k-editr.json --input-folder "D:/图片/3" \
-    --output-folder "D:/批量结果/3_full" --seed-mode random --resume
+# 命令行：用一份工作流批量处理一个文件夹
+python batch-tool/comfy_batch_runner.py --workflow my_workflow.json --input-folder "D:/images/3" \
+    --output-folder "D:/batch_results/3_full" --seed-mode random --resume
 
-# 网页版：打开 http://127.0.0.1:8091/  （或双击 start_comfy_batch.bat）
-python comfy_batch_tool.py --port 8091
+# 网页版：打开 http://127.0.0.1:8091/  （或双击 batch-tool/start.bat）
+python batch-tool/comfy_batch_tool.py --port 8091
 ```
 
 - **零依赖**：与仓库其他脚本一样，仅 Python 标准库。

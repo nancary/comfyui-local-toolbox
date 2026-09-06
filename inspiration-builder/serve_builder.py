@@ -48,7 +48,6 @@ except Exception:  # 独立运行时兜底：环境变量 + 常见安装位置�
                  os.path.join(home, "comfyui", "models", "loras")]
         if os.name == "nt":
             cands += ["D:/ComfyUI/models/loras",
-                      "D:/ADM-comfyui/models/loras",
                       os.path.join(home, "Documents", "ComfyUI", "models", "loras")]
         else:
             cands += ["/opt/ComfyUI/models/loras"]
