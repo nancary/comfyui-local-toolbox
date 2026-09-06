@@ -127,7 +127,8 @@ function addCart(name){
 }
 function renderCart(){
   var keys = Object.keys(CART);
-  $c('cartCnt').textContent = keys.length + ' 个 LoRA';
+  var cntEl = $c('cartCnt'); if(!cntEl) return; /* DOM 未就绪时跳过，bootCart 会在 DOMContentLoaded 后重跑 */
+  cntEl.textContent = keys.length + ' 个 LoRA';
   var baseEl = $c('cartBase');
   var expBtn = $c('cartExportBtn');
   var tryBtn = $c('cartTryBtn');
@@ -255,20 +256,25 @@ function sendToInspiration(){
   cartMsg('🧩 已把 '+loras.length+' 枚 LoRA 带去灵感积木（新标签页）','ok');
 }
 (function(){
-  document.querySelectorAll('.card').forEach(function(card){
-    var f = card.querySelector('.fname'); if(!f) return;
-    var thumb = card.querySelector('.thumb'); if(!thumb) return;
-    var btn = document.createElement('button');
-    btn.className = 'cart-btn'; btn.textContent = '🛒';
-    btn.title = '加入购物车（再次点击移除）';
-    btn.onclick = function(e){ e.stopPropagation(); addCart((f.title||f.textContent).trim()); };
-    thumb.appendChild(btn);
-    var t = (f.title||f.textContent).trim();
-    btn.classList.toggle('added', !!CART[t]);
-  });
-  renderCart();
-  scanBases();
-  if(!localStorage.getItem('cart_hint_shown')){ showCartHint(); localStorage.setItem('cart_hint_shown','1'); }
+  /* 购物车栏 HTML 位于脚本之后，必须等 DOM 就绪再初始化 */
+  function bootCart(){
+    document.querySelectorAll('.card').forEach(function(card){
+      var f = card.querySelector('.fname'); if(!f) return;
+      var thumb = card.querySelector('.thumb'); if(!thumb) return;
+      var btn = document.createElement('button');
+      btn.className = 'cart-btn'; btn.textContent = '🛒';
+      btn.title = '加入购物车（再次点击移除）';
+      btn.onclick = function(e){ e.stopPropagation(); addCart((f.title||f.textContent).trim()); };
+      thumb.appendChild(btn);
+      var t = (f.title||f.textContent).trim();
+      btn.classList.toggle('added', !!CART[t]);
+    });
+    renderCart();
+    scanBases();
+    if(!localStorage.getItem('cart_hint_shown')){ showCartHint(); localStorage.setItem('cart_hint_shown','1'); }
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootCart);
+  else bootCart();
 })();
 """
 

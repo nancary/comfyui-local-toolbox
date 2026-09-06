@@ -1198,6 +1198,7 @@ function delAnn() {
 }
 function buildAnnCatOptions() {
   var sel = document.getElementById('annCat');
+  if (!sel) return; /* 弹窗 HTML 在脚本之后注入时 sel 为空，等 DOMContentLoaded 再跑 */
   document.querySelectorAll('.chip.cat').forEach(function (ch) {
     var v = ch.getAttribute('data-cat');
     if (!v) return;
@@ -1248,8 +1249,10 @@ function toggleView() {
       var v = document.getElementById('viewBtn'); if (v) v.textContent = '▦ 网格';
     }
   } catch (e) {}
-  buildAnnCatOptions();
-  loadAnn();
+  /* 标注弹窗/购物车栏的 HTML 位于本脚本之后（注入），必须等 DOM 就绪再初始化，否则 null 崩溃会中断后续注入 */
+  function runLateInit() { buildAnnCatOptions(); loadAnn(); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', runLateInit);
+  else runLateInit();
 })();
 """
 
