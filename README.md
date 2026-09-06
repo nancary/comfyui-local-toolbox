@@ -9,6 +9,16 @@ running ComfyUI — no `pip install`, no custom nodes, no data leaving your mach
 | 🧱 **Inspiration Builder** | [`inspiration-builder/`](inspiration-builder/) | A unified local server + two in-browser builders: the **灵感积木** prompt composer (slot-based structure templates, curated CN/EN tag library, optional 3,000+ tag-supermarket import) and the **workflow builder** (pick LoRAs + base model → render straight through your ComfyUI). |
 | ⚡ **ComfyBatchTool** | [`batch-tool/`](batch-tool/) | Apply **one** workflow to **every image** in a folder — batch img2img / edit / upscale with live progress, ETA, pause/resume, and resume-from-checkpoint. CLI + Web UI. |
 
+## Screenshot
+
+**灵感积木 Inspiration Builder** — pick a base model, slot tags into structure templates (portrait / poetic / brand / landscape), switch to free-form blocks anytime, then render through your local ComfyUI:
+
+![Inspiration Builder — 灵感积木 prompt composer](docs/screenshots/inspiration-builder.png)
+
+**LoRA 图鉴 Civitai Gallery** — every local `.safetensors` hash-matched to its Civitai page: thumbnails, strength badges, trigger words, training-tag summaries, one-click workflow export:
+
+![LoRA Civitai Gallery](docs/screenshots/lora-gallery.png)
+
 ## Repository layout
 
 ```
