@@ -40,7 +40,7 @@ import urllib.request
 from datetime import datetime
 from html.parser import HTMLParser
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 
 def default_loras_dir():
@@ -76,6 +76,36 @@ UA = "Mozilla/5.0 (compatible; LoraGallery/1.0)"
 REQUEST_DELAY = 0.12          # 两次联网之间的礼貌间隔
 READ_TIMEOUT = 25
 MAX_DESC_CHARS = 600          # 卡片简介截断长度
+MAX_CARD_IMAGES = 3           # 每张卡片最多展示的示例图数量
+UNMATCHED_RETRY_DAYS = 3      # 未匹配 LoRA 间隔多少天重新反查一次 Civitai
+
+# ----------------------------------------------------------------------------
+# 视频模型 LoRA 过滤（Wan / LTX / HunyuanVideo 等视频基模的 LoRA 不进图鉴）
+# ----------------------------------------------------------------------------
+VIDEO_BASE_MODELS = {
+    "wan 2.1", "wan 2.2", "wan video", "wan 2.1 i2v", "wan 2.2 i2v",
+    "ltxv", "ltx video", "ltx-video", "ltxv 0.9", "ltxv 0.9.5",
+    "hunyuan video", "hunyuanvideo", "mochi", "cogvideox", "svd",
+}
+_VIDEO_DIR_NAMES = {"wan", "wan2", "wanvideo", "ltx", "ltxv", "video", "videos",
+                    "视频", "hunyuan", "hunyuanvideo", "mochi", "cogvideo"}
+# 文件名匹配：wan 后面必须跟 2/video/_/-/空格，避免误杀 wanx 这类图片模型
+_VIDEO_FNAME_RE = re.compile(r"(?:^|[^a-z])(?:wan(?:2|video|_|-|\s)|ltx|hunyuan|mochi|cogvideo|t2v|i2v)")
+
+
+def is_video_lora(rel, civitai=None):
+    """判断一个 LoRA 是否属于视频模型（按子目录名 / 文件名 / Civitai 基模）。"""
+    bdir = (os.path.dirname(rel) or "").strip().lower()
+    if bdir in _VIDEO_DIR_NAMES:
+        return True
+    fname = os.path.basename(rel).lower()
+    if _VIDEO_FNAME_RE.search(fname):
+        return True
+    if civitai:
+        bm = str(civitai.get("base_model") or "").lower()
+        if bm and any(bm == v or bm.startswith(v + " ") for v in VIDEO_BASE_MODELS):
+            return True
+    return False
 
 # ----------------------------------------------------------------------------
 # 工具函数
@@ -240,7 +270,9 @@ def _looks_like_style(name, tags, words):
     name_l = name.lower()
     text = name_l + " " + " ".join(tags) + " " + " ".join(w.lower() for w in words)
     style_kw = ("style", "styles", "art style", "artstyle", "artist", "drawing",
-                "painting", "watercolor", "sketch", "line art", "lineart", "illustration")
+                "painting", "watercolor", "sketch", "line art", "lineart", "illustration",
+                "cartoon", "glitch", "abstract", "psychedelic", "surreal", "pixel art",
+                "voxel", "concept art", "oil paint", "impasto")
     return any(kw in text for kw in style_kw)
 
 
@@ -257,6 +289,22 @@ def _looks_like_character(tags, words):
         # 至少 2 个人体特征词 或 明确服装描述
         hits = sum(1 for kw in body_kw if kw in wtext)
         if hits >= 2:
+            return True
+    return False
+
+
+def _strong_character(tags, words):
+    """比 _looks_like_character 更严：泛化的 character/game character/video game 标签
+    常被上传者乱打，不足以和风格信号抗衡；只有 celebrity/OC 标签或触发词含
+    ≥2 个人体特征词才算铁证。"""
+    tagset = set(tags)
+    if tagset & {"celebrity", "original character", "oc", "actress", "real person"}:
+        return True
+    body_kw = {"hair", "eyes", "outfit", "dress", "shirt", "jacket", "shorts",
+               "skin", "face", "earrings", "glasses", "choker", "gloves"}
+    if words:
+        wtext = " ".join(words).lower()
+        if sum(1 for kw in body_kw if kw in wtext) >= 2:
             return True
     return False
 
@@ -281,8 +329,8 @@ def classify_matched(rec):
 
     # 2) 强风格信号优先于角色（避免大量 Style LoRA 被误判为角色）
     if _looks_like_style(name, tags, words):
-        # 但如果是明确角色名 + 角色标签，仍判角色
-        if _looks_like_character(tags, words) and not any(k in name_l for k in ("style", "styles", "artist")):
+        # 但如果是铁证级角色证据（celebrity/OC 标签或触发词多人体特征），仍判角色
+        if _strong_character(tags, words) and not any(k in name_l for k in ("style", "styles", "artist")):
             return CAT_CHAR, (name or (words[0] if words else ""))
         return CAT_STYLE, (_pick(tags, _PREF_STYLE) or _pick(words, _PREF_STYLE) or name)
 
@@ -523,23 +571,20 @@ def query_civitai(sha):
         "type": (ver.get("model") or {}).get("type"),
         "images": [],
     }
-    # 取示例图 URL（优先非 NSFW）
+    # 取示例图 URL：最多 MAX_CARD_IMAGES 张，非 NSFW 优先
     imgs = ver.get("images") or []
-    picked = None
+    clean, fallback = [], []
     for im in imgs:
         if im.get("type") != "image":
             continue
-        if im.get("nsfwLevel", 0) not in (0, None):
+        url = im.get("url")
+        if not url:
             continue
-        picked = im.get("url")
-        break
-    if picked is None and imgs:
-        for im in imgs:
-            if im.get("type") == "image":
-                picked = im.get("url")
-                break
-    if picked:
-        civ["images"].append(picked)
+        if im.get("nsfwLevel", 0) in (0, None):
+            clean.append(url)
+        else:
+            fallback.append(url)
+    civ["images"] = (clean + fallback)[:MAX_CARD_IMAGES]
 
     # 调 models/{id} 取简介/标签/统计
     if model_id:
@@ -559,6 +604,28 @@ def query_civitai(sha):
             except Exception:
                 pass
     return True, civ
+
+
+def get_version_images(version_id):
+    """用 version_id 补拉该版本的示例图 URL 列表（旧缓存只存过 1 张时用于升级）。"""
+    if not version_id:
+        return []
+    st, body = http_get(f"https://civitai.com/api/v1/model-versions/{version_id}")
+    if st != 200 or not body:
+        return []
+    try:
+        ver = json.loads(body)
+    except Exception:
+        return []
+    clean, fallback = [], []
+    for im in ver.get("images") or []:
+        if im.get("type") != "image" or not im.get("url"):
+            continue
+        if im.get("nsfwLevel", 0) in (0, None):
+            clean.append(im["url"])
+        else:
+            fallback.append(im["url"])
+    return (clean + fallback)[:MAX_CARD_IMAGES]
 
 
 def _guess_image_ext(data):
@@ -629,6 +696,19 @@ def download_thumb(url, base_path):
         return False, None
 
 
+def download_thumbs(urls, base_rel, out_dir, no_thumbs=False):
+    """下载最多 MAX_CARD_IMAGES 张缩略图到 <base_rel>_i；返回成功落盘的相对路径列表。"""
+    rels = []
+    if no_thumbs or not urls:
+        return rels
+    for i, url in enumerate(urls[:MAX_CARD_IMAGES]):
+        base_path = os.path.join(out_dir, f"{base_rel}_{i}")
+        ok, final_path = download_thumb(url, base_path)
+        if ok:
+            rels.append(os.path.relpath(final_path, out_dir).replace("\\", "/"))
+    return rels
+
+
 # ----------------------------------------------------------------------------
 # 缓存
 # ----------------------------------------------------------------------------
@@ -686,6 +766,22 @@ def human_size(n):
     return f"{n:.1f}TB"
 
 
+def find_local_preview(previews_dir, fname):
+    """未匹配 LoRA 的本地预览图：previews/<去后缀>.png（含归一化变体名）。"""
+    if not previews_dir or not os.path.isdir(previews_dir):
+        return None
+    base = re.sub(r"\.safetensors$", "", fname, flags=re.I)
+    cands = [base + ".png",
+             re.sub(r"[^\w\-]+", "_", base) + ".png",
+             base.replace(".", "_") + ".png",
+             base.replace(" ", "_") + ".png"]
+    for cand in cands:
+        p = os.path.join(previews_dir, cand)
+        if os.path.exists(p):
+            return "previews/" + cand
+    return None
+
+
 def render_card(rec, out_dir):
     rel = rec["rel"]
     base_dir = rec.get("base_model_dir", "未知")
@@ -705,14 +801,24 @@ def render_card(rec, out_dir):
     summary_html = (f'<div class="sumline"><span class="cat-badge cat-{CAT_CLASS.get(cat, "unknown")}">{esc(cat)}</span>'
                    f'<span class="sumtext">{esc(summary)}</span></div>')
 
-    # 缩略图
+    # 缩略图：匹配 → 最多 MAX_CARD_IMAGES 张（1 主图 + 侧列小图）；
+    # 未匹配 → 回退 previews/ 下的本地生成预览图
     thumb_html = ""
     status_badge = ""
     if matched:
-        thumb_rel = rec.get("thumb")
+        imgs = [t for t in (rec.get("thumbs") or []) if t and os.path.exists(os.path.join(out_dir, t))]
+        if not imgs and rec.get("thumb") and os.path.exists(os.path.join(out_dir, rec["thumb"])):
+            imgs = [rec["thumb"]]
         remote = rec.get("thumb_remote")
-        if thumb_rel and os.path.exists(os.path.join(out_dir, thumb_rel)):
-            thumb_html = f'<img src="{esc(thumb_rel)}" alt="{esc(fname)}" onerror="imgFail(this)">'
+        if imgs:
+            if len(imgs) >= 2:
+                side = "".join(
+                    f'<img loading="lazy" src="{esc(p)}" alt="" onerror="this.remove()">'
+                    for p in imgs[1:MAX_CARD_IMAGES])
+                thumb_html = (f'<div class="mset"><img class="m" src="{esc(imgs[0])}" alt="{esc(fname)}" onerror="imgFail(this)">'
+                              f'<div class="side">{side}</div></div>')
+            else:
+                thumb_html = f'<img src="{esc(imgs[0])}" alt="{esc(fname)}" onerror="imgFail(this)">'
         elif remote:
             thumb_html = f'<img loading="lazy" src="{esc(remote)}" alt="{esc(fname)}" referrerpolicy="no-referrer">'
         else:
@@ -720,7 +826,11 @@ def render_card(rec, out_dir):
         if (civ.get("nsfw_level") or 0) not in (0, None):
             status_badge = '<span class="badge nsfw">NSFW</span>'
     else:
-        thumb_html = '<div class="nothumb">本地自训 / 未匹配</div>'
+        prev = find_local_preview(os.path.join(out_dir, "previews"), fname)
+        if prev:
+            thumb_html = f'<img src="{esc(prev)}" alt="{esc(fname)}" onerror="imgFail(this)">'
+        else:
+            thumb_html = '<div class="nothumb">本地自训 / 未匹配</div>'
         status_badge = '<span class="badge unmatched">未匹配</span>'
 
     civitai_name_html = ""
@@ -802,14 +912,14 @@ def _display_name(rec):
 
 
 def _natural_key(s):
-    """自然排序 key：数字段按数值比较，大小写不敏感。"""
+    """自然排序 key：数字段按数值比较，大小写不敏感；元组化避免 int/str 混比报错。"""
     s = s.lower()
-    return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", s)]
+    return [(0, int(p), "") if p.isdigit() else (1, 0, p) for p in re.split(r"(\d+)", s)]
 
 
 def build_html(records, out_path, out_dir, loras_dir, stats_summary):
-    # 默认按显示名称自然排序（A→Z，数字按大小），保证顺序稳定可预期
-    records_sorted = sorted(records, key=lambda r: (_natural_key(_display_name(r)), r["rel"]))
+    # 默认按卡片标题（文件名）自然排序（A→Z，数字按大小），保证顺序稳定可预期
+    records_sorted = sorted(records, key=lambda r: (_natural_key(os.path.basename(r["rel"])), r["rel"]))
     cards = "\n".join(render_card(r, out_dir) for r in records_sorted)
 
     base_dirs = sorted({r.get("base_model_dir", "未知") for r in records})
@@ -832,6 +942,8 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
     total = len(records)
     matched = sum(1 for r in records if r.get("civitai"))
     unmatched = total - matched
+    vid_note = (f'<div>已过滤视频模型 <b>{stats_summary.get("video", 0)}</b></div>'
+                if stats_summary.get("video") else "")
 
     # 未匹配清单面板
     unmatched_recs = [r for r in records if not r.get("civitai")]
@@ -956,6 +1068,7 @@ def build_html(records, out_path, out_dir, loras_dir, stats_summary):
     <div>共 <b>{total}</b> 个</div>
     <div>已匹配 Civitai <b style="color:#bbf7d0">{matched}</b></div>
     <div>未匹配/本地自训 <b style="color:#fde68a">{unmatched}</b></div>
+    {vid_note}
     <div>扫描目录 <b style="font-size:13px">{esc(loras_dir)}</b></div>
   </div>
 </header>
@@ -1042,16 +1155,21 @@ def main():
         log(f"错误：目录不存在 {loras_dir}")
         sys.exit(1)
 
-    # 1) 收集文件
+    # 1) 收集文件（视频模型 LoRA 直接跳过，不哈希不联网）
     files = []
+    skipped_early = 0
     for root, _, fs in os.walk(loras_dir):
         for f in fs:
             if f.lower().endswith(".safetensors"):
-                files.append(os.path.join(root, f))
+                full = os.path.join(root, f)
+                if is_video_lora(os.path.relpath(full, loras_dir)):
+                    skipped_early += 1
+                    continue
+                files.append(full)
     files.sort()
     if args.limit:
         files = files[: args.limit]
-    log(f"扫描到 {len(files)} 个 safetensors")
+    log(f"扫描到 {len(files)} 个 safetensors" + (f"（另跳过视频模型 {skipped_early} 个）" if skipped_early else ""))
 
     cache = {} if args.force else load_cache(cache_path)
     records = []
@@ -1097,18 +1215,14 @@ def main():
         if ok and civ:
             rec["civitai"] = civ
             matched_n += 1
-            # 4) 缩略图
-            if not args.no_thumbs and civ.get("images"):
-                thumb_base = f"thumbs/{sha[:16]}"
-                tpath = os.path.join(out_dir, thumb_base)
-                ok, final_path = download_thumb(civ["images"][0], tpath)
-                if ok:
-                    rec["thumb"] = os.path.relpath(final_path, out_dir).replace("\\", "/")
-                else:
-                    rec["thumb_remote"] = civ["images"][0]
+            # 4) 缩略图（最多 MAX_CARD_IMAGES 张）
+            rec["thumbs"] = download_thumbs(civ.get("images") or [], f"thumbs/{sha[:16]}", out_dir, args.no_thumbs)
+            if rec["thumbs"]:
+                rec["thumb"] = rec["thumbs"][0]
             elif civ.get("images"):
                 rec["thumb_remote"] = civ["images"][0]
         else:
+            rec["last_try"] = int(time.time())
             # 5) 本地回退
             meta = read_safetensors_meta(path)
             rec["local"] = extract_local_hints(meta)
@@ -1119,32 +1233,92 @@ def main():
         cache[rel] = {
             "size": size, "mtime": mtime, "sha256": sha,
             "civitai": rec["civitai"], "local": rec["local"],
-            "thumb": rec["thumb"], "thumb_remote": rec["thumb_remote"],
+            "thumb": rec["thumb"], "thumbs": rec.get("thumbs"),
+            "thumb_remote": rec["thumb_remote"], "last_try": rec.get("last_try"),
         }
         done += 1
         time.sleep(REQUEST_DELAY)
 
-    # 组装 records（含缓存命中的也要进图鉴）
+    # 增量升级：旧缓存示例图不足的补拉到 MAX_CARD_IMAGES 张；
+    # 未匹配超过 UNMATCHED_RETRY_DAYS 天的用缓存 SHA 重新反查一次（不重新哈希）
+    if not args.dry_run and not args.no_thumbs:
+        now = int(time.time())
+        up_imgs = retry_ok = 0
+        for rel, c in cache.items():
+            civ = c.get("civitai")
+            sha = c.get("sha256")
+            if civ:
+                urls = civ.get("images") or []
+                if not c.get("imgs_checked") and len(urls) < MAX_CARD_IMAGES and civ.get("version_id"):
+                    urls = get_version_images(civ.get("version_id")) or urls
+                    civ["images"] = urls
+                    c["imgs_checked"] = True
+                    time.sleep(REQUEST_DELAY)
+                want_n = min(MAX_CARD_IMAGES, len(urls))
+                if not urls or len(c.get("thumbs") or []) >= want_n:
+                    continue
+                thumbs = download_thumbs(urls, f"thumbs/{(sha or 'x')[:16]}", out_dir)
+                if thumbs:
+                    c["thumbs"] = thumbs
+                    c["thumb"] = thumbs[0]
+                    up_imgs += 1
+                    time.sleep(REQUEST_DELAY)
+            else:
+                if now - (c.get("last_try") or 0) < UNMATCHED_RETRY_DAYS * 86400:
+                    continue
+                if not sha:
+                    continue
+                ok, nciv = query_civitai(sha)
+                c["last_try"] = now
+                if ok and nciv:
+                    c["civitai"] = nciv
+                    matched_n += 1
+                    thumbs = download_thumbs(nciv.get("images") or [], f"thumbs/{sha[:16]}", out_dir)
+                    if thumbs:
+                        c["thumbs"] = thumbs
+                        c["thumb"] = thumbs[0]
+                    retry_ok += 1
+                time.sleep(REQUEST_DELAY)
+        if up_imgs or retry_ok:
+            log(f"增量升级：示例图补齐 {up_imgs} 个，未匹配重试命中 {retry_ok} 个")
+
+    # 组装 records（含缓存命中的也要进图鉴）；视频模型 LoRA 不进图鉴
+    records = []
+    skipped_video = 0
     for path in files:
         rel = os.path.relpath(path, loras_dir)
         c = cache.get(rel)
+        civ = (c or {}).get("civitai")
+        if is_video_lora(rel, civ):
+            skipped_video += 1
+            continue
         if c:
             rec = {"rel": rel, "base_model_dir": os.path.dirname(rel) or "根目录",
                    "size": c.get("size", 0), "mtime": c.get("mtime", 0),
                    "civitai": c.get("civitai"), "local": c.get("local", {}),
-                   "thumb": c.get("thumb"), "thumb_remote": c.get("thumb_remote")}
+                   "thumb": c.get("thumb"), "thumbs": c.get("thumbs") or [],
+                   "thumb_remote": c.get("thumb_remote")}
             # 修正旧缓存里扩展名错误的缩略图路径
             fixed = fix_thumb_path(rec["thumb"], out_dir)
             if fixed != rec["thumb"]:
                 rec["thumb"] = fixed
                 c["thumb"] = fixed
+            if rec["thumbs"]:
+                rec["thumbs"] = [t if t == rec["thumb"] else t for t in rec["thumbs"]]
+                if rec["thumb"] and rec["thumb"] not in rec["thumbs"]:
+                    rec["thumbs"][0] = rec["thumb"]
+            else:
+                rec["thumbs"] = [rec["thumb"]] if rec["thumb"] else []
             if rec["civitai"] is None and not rec["local"]:
                 rec["local"] = {"top_tags": [rec["base_model_dir"]]}
             records.append(rec)
+    if skipped_video:
+        log(f"已过滤视频模型 LoRA {skipped_video} 个（Wan/LTX 等，不进图鉴）")
 
     if not args.dry_run:
         save_cache(cache_path, cache)
-        stats_summary = {"time": datetime.now().strftime("%Y-%m-%d %H:%M"), "total": len(records)}
+        stats_summary = {"time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                         "total": len(records), "video": skipped_video}
         build_html(records, html_path, out_dir, loras_dir, stats_summary)
         log(f"完成！共 {len(records)} 个，匹配 Civitai {matched_n} 个")
         log(f"图鉴：{html_path}")
