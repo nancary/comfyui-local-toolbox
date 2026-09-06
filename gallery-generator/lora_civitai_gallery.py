@@ -74,9 +74,10 @@ CIVITAI_BY_HASH = "https://civitai.com/api/v1/model-versions/by-hash/{sha}"
 CIVITAI_MODEL = "https://civitai.com/api/v1/models/{model_id}"
 # 名字兜底搜索：limit 控制结果数，nsfw=true 不漏掉 NSFW（红标）模型
 CIVITAI_SEARCH = "https://civitai.com/api/v1/models?query={q}&limit=8&nsfw=true"
-# HuggingFace 兜底：Civitai 上没有的（很多 LoRA 只发 HF）
-HF_SEARCH = "https://huggingface.co/api/models?search={q}&limit=10"
-HF_TREE = "https://huggingface.co/api/models/{repo}/tree/main"
+# HuggingFace 兜底：Civitai 上没有的（很多 LoRA 只发 HF）。
+# 镜像 hf-mirror.com 放首位（API 完全兼容、国内直连快），主站作备选
+HF_HOSTS = ("https://hf-mirror.com", "https://huggingface.co")
+_HF_HOST_STATE = None  # 本次运行中已验证可用的 HF 端点（粘性，避免每文件反复超时）
 UA = "Mozilla/5.0 (compatible; LoraGallery/1.0)"
 REQUEST_DELAY = 0.12          # 两次联网之间的礼貌间隔
 READ_TIMEOUT = 25
@@ -758,24 +759,41 @@ def search_civitai_by_name(fname, sha, fsize=None):
 
 
 def search_huggingface(fname, fsize=None):
-    """Civitai 全部失败的 HuggingFace 兜底。
+    """Civitai 全部失败的 HuggingFace 兜底（huggingface.co 失败自动切 hf-mirror.com）。
+    镜像切换在本运行内粘性记忆：主站一旦不通，后续请求直接走镜像（避免每文件反复超时）。
     返回 (matched, hf_or_None)：
     - 候选仓库里有 .safetensors 文件大小与本地一致（±3%）→ 确认匹配
     - 名字相似但大小对不上 → 返回疑似仓库链接（供人工确认）
     """
+    global _HF_HOST_STATE
     q = _clean_search_name(fname)
     if len(q) < 3:
         return False, None
-    st, body = http_get(HF_SEARCH.format(q=urllib.parse.quote(q)))
-    if st != 200 or not body:
+    hosts = list(HF_HOSTS)
+    if _HF_HOST_STATE:
+        hosts.sort(key=lambda h: 0 if h == _HF_HOST_STATE else 1)  # 可用主机优先
+    items = None
+    working_host = None
+    for host in hosts:
+        st, body = http_get(host + "/api/models?search=" + urllib.parse.quote(q) + "&limit=10")
+        if st == 200 and body:
+            try:
+                data = json.loads(body)
+                if isinstance(data, list) and data:
+                    items = data
+                    working_host = host
+                    break
+            except Exception:
+                pass
+    if not items:
         return False, None
-    try:
-        items = json.loads(body)
-    except Exception:
-        return False, None
+    if _HF_HOST_STATE != working_host:
+        log(f"HuggingFace 端点切换：使用 {working_host}")
+    _HF_HOST_STATE = working_host
+    ordered = sorted(hosts, key=lambda h: 0 if h == working_host else 1)  # 文件树也用可用主机优先
     fname_base = re.sub(r"\.safetensors$", "", fname, flags=re.I)
     cands = []
-    for it in items if isinstance(items, list) else []:
+    for it in items:
         repo = it.get("repoId") or it.get("id") or ""
         if repo:
             cands.append(repo)
@@ -783,24 +801,26 @@ def search_huggingface(fname, fsize=None):
     cands.sort(key=lambda r: -_name_similarity(r.split("/")[-1], fname_base))
     tol = max(2 * 1024 * 1024, 0.03 * fsize) if fsize else 0
     for repo in cands[:5]:
-        st, tb = http_get(HF_TREE.format(repo=urllib.parse.quote(repo, safe="")))
-        if st != 200 or not tb:
-            continue
-        try:
-            tree = json.loads(tb)
-        except Exception:
-            continue
-        for f in tree if isinstance(tree, list) else []:
-            p = f.get("path") or ""
-            if not p.lower().endswith(".safetensors"):
+        repo_q = urllib.parse.quote(repo, safe="/")  # 保留 /，整段编码会 400
+        for host in ordered:
+            st, tb = http_get(host + f"/api/models/{repo_q}/tree/main")
+            if st != 200 or not tb:
                 continue
-            sz = (f.get("lfs") or {}).get("size") or f.get("size") or 0
-            if fsize and sz and abs(sz - fsize) <= tol:
-                return True, {"repo": repo, "file": p, "size": sz, "via": "huggingface",
-                              "url": f"https://huggingface.co/{repo}/blob/main/{urllib.parse.quote(p)}"}
+            try:
+                tree = json.loads(tb)
+            except Exception:
+                continue
+            for f in tree if isinstance(tree, list) else []:
+                p = f.get("path") or ""
+                if not p.lower().endswith(".safetensors"):
+                    continue
+                sz = (f.get("lfs") or {}).get("size") or f.get("size") or 0
+                if fsize and sz and abs(sz - fsize) <= tol:
+                    return True, {"repo": repo, "file": p, "size": sz, "via": "huggingface", "host": host,
+                                  "url": f"{host}/{repo}/blob/main/{urllib.parse.quote(p)}"}
     if cands:
         return False, {"repo": cands[0], "file": "", "size": 0, "via": "huggingface-guess",
-                       "url": f"https://huggingface.co/{cands[0]}"}
+                       "url": f"{working_host}/{cands[0]}"}
     return False, None
 
 
@@ -1590,13 +1610,10 @@ def main():
             else:
                 if is_video_lora(rel, civ):
                     continue  # 视频 LoRA 不做任何反查
-                if not sha:
-                    continue
                 hash_done = now - (c.get("last_try") or 0) < UNMATCHED_RETRY_DAYS * 86400
                 name_done = bool(c.get("name_tried"))
-                if hash_done and name_done:
-                    continue
-                if not hash_done:
+                # 注意：Civitai 阶段跳过（hash_done && name_done）不能跳过 HF 兜底阶段
+                if not hash_done and sha:
                     ok, nciv = query_civitai(sha)
                     c["last_try"] = now
                     if ok and nciv:
@@ -1621,19 +1638,21 @@ def main():
                             c["thumbs"] = thumbs
                             c["thumb"] = thumbs[0]
                         retry_name += 1
-                    elif guess:
+                        time.sleep(REQUEST_DELAY)
+                        continue
+                    if guess:
                         c["guess"] = guess
                         guess_n += 1
-                    else:
-                        # Civitai 一无所获 → HuggingFace 兜底（大小一致即确认匹配）
-                        c["hf_tried"] = True
-                        ok3, hf = search_huggingface(os.path.basename(rel), fsize=c.get("size"))
-                        if ok3 and hf:
-                            c["hf"] = hf
-                            hf_n += 1
-                        elif hf:
-                            c["hf_guess"] = hf
-                        time.sleep(REQUEST_DELAY)
+                    time.sleep(REQUEST_DELAY)
+                # HuggingFace 兜底：独立阶段（一次），Civitai 确认成功则不跑
+                if not c.get("civitai") and not c.get("hf_tried"):
+                    c["hf_tried"] = True
+                    ok3, hf = search_huggingface(os.path.basename(rel), fsize=c.get("size"))
+                    if ok3 and hf:
+                        c["hf"] = hf
+                        hf_n += 1
+                    elif hf:
+                        c["hf_guess"] = hf
                     time.sleep(REQUEST_DELAY)
         if up_imgs or retry_ok or retry_name or guess_n or hf_n:
             log(f"增量升级：示例图补齐 {up_imgs} 个，哈希重试命中 {retry_ok} 个，"
