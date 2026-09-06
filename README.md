@@ -93,7 +93,7 @@ This repo contains **no hardcoded personal paths** — everything is discovered 
 ## Install
 
 ```bash
-git clone https://github.com/your-username/lora-civitai-gallery.git
+git clone https://github.com/nancary/comfyui-local-toolbox.git
 cd lora-civitai-gallery
 # that's it — every script is runnable as-is
 ```
