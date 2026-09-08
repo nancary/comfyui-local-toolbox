@@ -95,14 +95,15 @@ def main():
 
     server_py = os.path.join(HERE, "serve_builder.py")
     loras_dir = args.loras_dir or default_loras_dir()
+    if not loras_dir:
+        print("[start] ❌ 未找到 LoRA 目录：请设置用户环境变量 COMFYUI_LORAS_DIR 指向 ComfyUI 的 models/loras，"
+              "或用 --loras-dir 指定。图鉴离不开 LoRA 目录，服务无法启动。")
+        sys.exit(1)
     cmd = [sys.executable, server_py,
            "--port", str(args.port),
            "--comfy", args.comfy,
-           "--www", HERE]
-    if loras_dir:
-        cmd += ["--loras-dir", loras_dir]
-    else:
-        print("[start] ⚠ 未探测到 LoRA 目录（--loras-dir / COMFYUI_LORAS_DIR），服务仍会启动；扫描功能需之后指定。")
+           "--www", HERE,
+           "--loras-dir", loras_dir]
     print("[start] 启动统一服务：%s" % " ".join(cmd))
     proc = subprocess.Popen(cmd)
     # 服务进程退出时本启动器也退出
