@@ -29,6 +29,7 @@ import re
 import json
 import time
 import uuid
+import hashlib
 import argparse
 import threading
 import urllib.request
@@ -1184,6 +1185,8 @@ def main():
         print(f"[lora-tool] ❌ 端口 {args.port} 绑定失败（{e}）。多半已被占用：换端口 python serve_builder.py --port 9000，或先停掉旧服务。")
         sys.exit(1)
     try:
+        threading.Thread(target=_gallery_watch_thread, args=(loras_dir, os.path.abspath(args.www)),
+                         daemon=True).start()
         srv.serve_forever()
     except KeyboardInterrupt:
         pass
@@ -1195,6 +1198,113 @@ def _probe(comfy):
             return r.status == 200
     except Exception:
         return False
+
+
+# ---------------- 图鉴自动重建：监听 LoRA 目录变化 ----------------
+_WATCH_REBUILDING = False
+
+def _scan_signature(loras_dir):
+    """目录指纹：所有 .safetensors 的 (相对路径, 大小, mtime) 的稳定摘要。
+    用 sha256 而非 hash()——Python 字符串哈希按进程随机化，落盘跨重启会误判。"""
+    sig = []
+    for root, _, fs in os.walk(loras_dir):
+        for f in fs:
+            if f.lower().endswith(".safetensors"):
+                full = os.path.join(root, f)
+                try:
+                    st = os.stat(full)
+                    sig.append((os.path.relpath(full, loras_dir), st.st_size, st.st_mtime))
+                except OSError:
+                    pass
+    sig.sort()
+    return hashlib.sha256(repr(sig).encode("utf-8", "surrogateescape")).hexdigest()
+
+def _gallery_watch_thread(loras_dir, www, interval=10, stable_polls=2):
+    """后台轮询 LoRA 目录；连续 stable_polls 次指纹一致且与上次不同 → 增量重建图鉴。
+    连续两次一致是为了等大文件拷贝完成，避免对半截文件做哈希。
+    指纹落盘 .gallery_sig.json：服务重启时若目录相对上次重建有变化，立即补一次重建。"""
+    global _WATCH_REBUILDING
+    try:
+        _here = os.path.dirname(os.path.abspath(__file__))
+        _parent = os.path.dirname(_here)
+        for p in (_here, _parent):  # 模块可能与服务同目录，也可能在上一级
+            if p not in sys.path:
+                sys.path.insert(0, p)
+        import lora_civitai_gallery
+    except Exception as e:
+        print(f"[lora-tool] ⚠️ 目录监听未启用：找不到 lora_civitai_gallery 模块（{e}）")
+        return
+    sig_file = os.path.join(os.path.abspath(www), ".gallery_sig.json")
+
+    def load_sig():
+        try:
+            return json.load(open(sig_file, encoding="utf-8")).get("sig")
+        except Exception:
+            return None
+
+    def save_sig(sig):
+        try:
+            with open(sig_file + ".tmp", "w", encoding="utf-8") as f:
+                json.dump({"sig": sig}, f)
+            os.replace(sig_file + ".tmp", sig_file)
+        except Exception:
+            pass
+
+    saved_sig = load_sig()
+    last_sig = _scan_signature(loras_dir)
+    _do_rebuild = False
+    if saved_sig is None:
+        save_sig(last_sig)
+    elif saved_sig != last_sig:
+        # 服务停摆期间目录发生过变化 → 启动即补一次重建
+        pending_sig, stable_n = last_sig, stable_polls  # 直接走重建分支
+        print("[lora-tool] 🔔 检测到上次服务期间 LoRA 目录有变化，先补一次重建…")
+        _do_rebuild = True
+    else:
+        pending_sig, stable_n, _do_rebuild = None, 0, False
+    print(f"[lora-tool] 🔄 图鉴自动更新已启动（每 {interval}s 轮询 {loras_dir}）")
+
+    def rebuild():
+        global _WATCH_REBUILDING
+        if _WATCH_REBUILDING:
+            return
+        _WATCH_REBUILDING = True
+        try:
+            print(f"[lora-tool] 🔔 检测到 LoRA 目录变化（{time.strftime('%H:%M:%S')}），增量重建图鉴…")
+            try:
+                lora_civitai_gallery.main(["--out-dir", www, "--loras-dir", loras_dir])
+            except SystemExit as e:
+                if e.code not in (0, None):
+                    print(f"[lora-tool] ❌ 重建进程退出码 {e.code}")
+            save_sig(_scan_signature(loras_dir))
+            print("[lora-tool] ✅ 图鉴已自动重建，刷新页面即见")
+        except Exception as e:
+            print(f"[lora-tool] ❌ 图鉴重建失败：{e}")
+        finally:
+            _WATCH_REBUILDING = False
+
+    if _do_rebuild:
+        rebuild()
+
+    while True:
+        time.sleep(interval)
+        try:
+            sig = _scan_signature(loras_dir)
+            if sig == last_sig:
+                pending_sig, stable_n = None, 0
+                continue
+            if sig != pending_sig:
+                pending_sig, stable_n = sig, 1
+                continue
+            stable_n += 1
+            if stable_n < stable_polls:
+                continue
+            # 指纹已连续两次一致且 != last_sig → 触发重建
+            rebuild()
+            last_sig = _scan_signature(loras_dir)
+            pending_sig, stable_n = None, 0
+        except Exception as e:
+            print(f"[lora-tool] ❌ 监听线程异常：{e}")
 
 
 if __name__ == "__main__":

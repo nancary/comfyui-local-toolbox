@@ -1853,7 +1853,7 @@ def _inject_cart(html_path):
 # ----------------------------------------------------------------------------
 # 主流程
 # ----------------------------------------------------------------------------
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="扫描本地 LoRA 目录，按 SHA256 反查 Civitai，生成可视化图鉴。")
     ap.add_argument("--loras-dir", default=None,
                     help="LoRA 目录（默认自动探测常见 ComfyUI 位置，或用环境变量 COMFYUI_LORAS_DIR 覆盖）")
@@ -1863,7 +1863,7 @@ def main():
     ap.add_argument("--no-thumbs", action="store_true", help="不下载缩略图，引远程 URL")
     ap.add_argument("--force", action="store_true", help="忽略缓存全部重算")
     ap.add_argument("--dry-run", action="store_true", help="只扫描+哈希+计数，不联网")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     loras_dir = os.path.abspath(args.loras_dir) if args.loras_dir else default_loras_dir()
     out_dir = os.path.abspath(args.out_dir)
